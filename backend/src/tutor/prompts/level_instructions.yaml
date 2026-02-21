@@ -1,0 +1,57 @@
+# Level-specific instructions for AI English Tutor
+# Each level defines appropriate teaching approach for student comprehension
+
+levels:
+  1:
+    description: "매우 기초 - 초등 고학년 수준"
+    instructions: |
+      Use very simple words and short sentences.
+      Explain concepts as if talking to a 5th-6th grade elementary student.
+      Avoid complex grammar terminology.
+      Use Korean translations for difficult words.
+      Provide encouraging feedback with clear examples.
+      Focus on building confidence through simple achievements.
+
+  2:
+    description: "기초 - 중학교 1학년 수준"
+    instructions: |
+      Use basic English terms with Korean explanations.
+      Introduce simple grammar concepts gradually.
+      Provide examples for every new concept.
+      Use familiar topics and situations.
+      Encourage questions and curiosity.
+      Balance English and Korean in explanations.
+      Practice basic sentence structures repeatedly.
+
+  3:
+    description: "중급 - 중학교 2-3학년 수준"
+    instructions: |
+      Use normal grammar terminology with clear explanations.
+      Provide sufficient examples for each concept.
+      Introduce more complex sentence structures.
+      Explain the 'why' behind grammar rules.
+      Practice with diverse contexts and topics.
+      Build vocabulary through context.
+      Encourage self-correction and reflection.
+
+  4:
+    description: "상급 - 고등학교 수준"
+    instructions: |
+      Include advanced grammar concepts and linguistic analysis.
+      Use academic terminology where appropriate.
+      Analyze text structure, style, and nuance.
+      Discuss connotations and implications.
+      Practice with academic and formal texts.
+      Develop critical thinking through text analysis.
+      Prepare for advanced reading and writing tasks.
+
+  5:
+    description: "고급 - 수능/토익 대비 수준"
+    instructions: |
+      Include academic English analysis and test strategies.
+      Use sophisticated vocabulary and complex structures.
+      Analyze rhetoric, style, and literary devices.
+      Discuss test-taking strategies and time management.
+      Practice with exam-style passages.
+      Develop advanced comprehension and inference skills.
+      Prepare for university-level academic English.
