@@ -7,6 +7,8 @@ image analysis, and chat functionality with SSE streaming.
 from __future__ import annotations
 
 import json
+import logging
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -22,6 +24,8 @@ from tutor.services.streaming import (
     format_reading_chunk,
     format_vocabulary_chunk,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["tutor"])
 
@@ -80,7 +84,7 @@ async def analyze(request: AnalyzeRequest) -> StreamingResponse:
         }
     """
 
-    async def generate() -> str:
+    async def generate() -> AsyncGenerator[str, None]:
         """Generate SSE events from LangGraph execution."""
         try:
             # Create new session
@@ -157,7 +161,7 @@ async def analyze_image(request: AnalyzeImageRequest) -> StreamingResponse:
             detail=error_msg,
         )
 
-    async def generate() -> str:
+    async def generate() -> AsyncGenerator[str, None]:
         """Generate SSE events from image processing."""
         try:
             # Create new session
@@ -235,7 +239,7 @@ async def chat(request: ChatRequest) -> StreamingResponse:
     else:
         session_id = request.session_id
 
-    async def generate() -> str:
+    async def generate() -> AsyncGenerator[str, None]:
         """Generate SSE events from chat processing."""
         try:
             # Add user message to session
