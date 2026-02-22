@@ -17,7 +17,7 @@ interface ChatContainerProps {
  */
 export function ChatContainer({ children, className }: ChatContainerProps) {
   return (
-    <div className={cn("flex flex-col h-full", className)}>
+    <div className={cn("flex flex-col h-full overflow-hidden", className)}>
       {children}
     </div>
   );

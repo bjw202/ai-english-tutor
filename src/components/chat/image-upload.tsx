@@ -9,15 +9,29 @@ const MAX_FILE_SIZE = DEFAULT_SETTINGS.maxFileSize; // 10MB
 interface ImageUploadProps {
   onFileSelect: (file: File) => void;
   className?: string;
+  /** Variant: "default" shows drag & drop, "camera-buttons" shows camera + gallery buttons */
+  variant?: "default" | "camera-buttons";
+  /** When true, shows a camera capture button (uses device camera) */
+  enableCapture?: boolean;
 }
 
 /**
  * Image upload component with drag & drop support
+ *
+ * Variants:
+ * - default: Drag & drop area with select button
+ * - camera-buttons: Two buttons for camera capture and gallery selection (mobile-friendly)
  */
-export function ImageUpload({ onFileSelect, className }: ImageUploadProps) {
+export function ImageUpload({
+  onFileSelect,
+  className,
+  variant = "default",
+  enableCapture = false,
+}: ImageUploadProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (file: File) => {
     // Validate file size
@@ -79,6 +93,108 @@ export function ImageUpload({ onFileSelect, className }: ImageUploadProps) {
     inputRef.current?.click();
   };
 
+  const handleCameraClick = () => {
+    cameraInputRef.current?.click();
+  };
+
+  // Camera-buttons variant: mobile-friendly camera + gallery buttons
+  if (variant === "camera-buttons") {
+    return (
+      <div className={cn("space-y-3", className)}>
+        {/* Hidden input for gallery selection */}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleInputChange}
+          className="hidden"
+          data-testid="gallery-input"
+        />
+
+        {/* Hidden input for camera capture */}
+        {enableCapture && (
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleInputChange}
+            className="hidden"
+            data-testid="camera-input"
+          />
+        )}
+
+        {/* Image preview */}
+        {preview && (
+          <div className="relative">
+            <img
+              src={preview}
+              alt="Preview"
+              className="w-full h-auto rounded-md max-h-[200px] object-contain border"
+            />
+          </div>
+        )}
+
+        {/* Camera buttons */}
+        <div className="flex gap-2">
+          {enableCapture && (
+            <Button
+              onClick={handleCameraClick}
+              variant="default"
+              className="flex-1 gap-2"
+              aria-label="카메라로 사진 촬영"
+            >
+              {/* Camera icon */}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                <circle cx="12" cy="13" r="3" />
+              </svg>
+              카메라 촬영
+            </Button>
+          )}
+
+          <Button
+            onClick={handleButtonClick}
+            variant="outline"
+            className="flex-1 gap-2"
+            aria-label="갤러리에서 사진 선택"
+          >
+            {/* Gallery/image icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+              <circle cx="9" cy="9" r="2" />
+              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+            </svg>
+            사진 선택
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Default variant: drag & drop area
   return (
     <div
       data-testid="drop-zone"

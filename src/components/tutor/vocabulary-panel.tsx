@@ -1,4 +1,5 @@
 import React from "react";
+import ReactMarkdown from "react-markdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { VocabularyResult } from "@/types/tutor";
@@ -6,50 +7,30 @@ import type { VocabularyResult } from "@/types/tutor";
 interface VocabularyPanelProps {
   result: VocabularyResult | null;
   className?: string;
+  /** Raw text content as fallback display */
+  rawContent?: string;
 }
 
 /**
  * Vocabulary analysis panel
  * Displays vocabulary words with definitions and difficulty level
  */
-export function VocabularyPanel({ result, className }: VocabularyPanelProps) {
-  if (!result) {
+export function VocabularyPanel({ result, rawContent, className }: VocabularyPanelProps) {
+  // If we have structured result, use it
+  if (result && result.words && result.words.length > 0) {
     return (
       <Card className={className}>
-        <CardContent className="p-6 text-center text-muted-foreground">
-          No vocabulary analysis yet
-        </CardContent>
-      </Card>
-    );
-  }
+        <CardHeader>
+          <CardTitle className="text-lg">Vocabulary Analysis</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Difficulty Level:</span>
+            <span className="text-sm text-muted-foreground">
+              {result.difficultyLevel}/5
+            </span>
+          </div>
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case "basic":
-        return "bg-green-500";
-      case "intermediate":
-        return "bg-yellow-500";
-      case "advanced":
-        return "bg-red-500";
-      default:
-        return "bg-gray-500";
-    }
-  };
-
-  return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle className="text-lg">Vocabulary Analysis</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Difficulty Level:</span>
-          <span className="text-sm text-muted-foreground">
-            {result.difficultyLevel}/5
-          </span>
-        </div>
-
-        {result.words.length > 0 && (
           <div className="space-y-3">
             {result.words.map((word, index) => (
               <div
@@ -71,8 +52,46 @@ export function VocabularyPanel({ result, className }: VocabularyPanelProps) {
               </div>
             ))}
           </div>
-        )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // If we have raw content (from streaming), display it
+  if (rawContent && rawContent.trim().length > 0) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="text-lg">Vocabulary Analysis</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown>{rawContent}</ReactMarkdown>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // No content available
+  return (
+    <Card className={className}>
+      <CardContent className="p-6 text-center text-muted-foreground">
+        No vocabulary analysis yet
       </CardContent>
     </Card>
   );
+}
+
+function getDifficultyColor(difficulty: string): string {
+  switch (difficulty) {
+    case "basic":
+      return "bg-green-500";
+    case "intermediate":
+      return "bg-yellow-500";
+    case "advanced":
+      return "bg-red-500";
+    default:
+      return "bg-gray-500";
+  }
 }

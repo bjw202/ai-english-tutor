@@ -1,4 +1,5 @@
 import React from "react";
+import ReactMarkdown from "react-markdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { GrammarResult } from "@/types/tutor";
@@ -64,14 +65,12 @@ export function GrammarPanel({ result, className }: GrammarPanelProps) {
 
         {result.suggestions.length > 0 && (
           <div>
-            <h4 className="font-medium mb-2">Suggestions</h4>
-            <ul className="list-disc list-inside space-y-1">
+            <h4 className="font-medium mb-2">Analysis</h4>
+            <div className="prose prose-sm dark:prose-invert max-w-none">
               {result.suggestions.map((suggestion, index) => (
-                <li key={index} className="text-sm text-muted-foreground">
-                  {suggestion}
-                </li>
+                <ReactMarkdown key={index}>{suggestion}</ReactMarkdown>
               ))}
-            </ul>
+            </div>
           </div>
         )}
       </CardContent>

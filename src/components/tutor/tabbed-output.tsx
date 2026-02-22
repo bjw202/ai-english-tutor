@@ -9,6 +9,8 @@ interface TabbedOutputProps {
   reading: ReadingResult | null;
   grammar: GrammarResult | null;
   vocabulary: VocabularyResult | null;
+  /** Raw vocabulary content as fallback display */
+  vocabularyRawContent?: string;
   className?: string;
 }
 
@@ -19,39 +21,42 @@ export function TabbedOutput({
   reading,
   grammar,
   vocabulary,
+  vocabularyRawContent,
   className,
 }: TabbedOutputProps) {
   const [activeTab, setActiveTab] = useState("reading");
 
-  const hasContent = reading || grammar || vocabulary;
+  const hasContent = reading || grammar || vocabulary || (vocabularyRawContent && vocabularyRawContent.length > 0);
 
   if (!hasContent) {
     return (
-      <div className="p-6 text-center text-muted-foreground">
+      <div className="p-6 text-center text-muted-foreground h-full flex items-center justify-center">
         Submit text or upload an image to see analysis results
       </div>
     );
   }
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className={className}>
-      <TabsList className="grid w-full grid-cols-3">
-        <TabsTrigger value="reading">Reading</TabsTrigger>
-        <TabsTrigger value="grammar">Grammar</TabsTrigger>
-        <TabsTrigger value="vocabulary">Vocabulary</TabsTrigger>
-      </TabsList>
+    <div className={`h-full ${className || ""}`}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+        <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
+          <TabsTrigger value="reading">Reading</TabsTrigger>
+          <TabsTrigger value="grammar">Grammar</TabsTrigger>
+          <TabsTrigger value="vocabulary">Vocabulary</TabsTrigger>
+        </TabsList>
 
-      <TabsContent value="reading" className="mt-4">
-        <ReadingPanel result={reading} />
-      </TabsContent>
+        <TabsContent value="reading" className="mt-4 flex-1 overflow-y-auto">
+          <ReadingPanel result={reading} />
+        </TabsContent>
 
-      <TabsContent value="grammar" className="mt-4">
-        <GrammarPanel result={grammar} />
-      </TabsContent>
+        <TabsContent value="grammar" className="mt-4 flex-1 overflow-y-auto">
+          <GrammarPanel result={grammar} />
+        </TabsContent>
 
-      <TabsContent value="vocabulary" className="mt-4">
-        <VocabularyPanel result={vocabulary} />
-      </TabsContent>
-    </Tabs>
+        <TabsContent value="vocabulary" className="mt-4 flex-1 overflow-y-auto">
+          <VocabularyPanel result={vocabulary} rawContent={vocabularyRawContent} />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }

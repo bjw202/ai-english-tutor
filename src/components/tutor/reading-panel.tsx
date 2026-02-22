@@ -1,4 +1,5 @@
 import React from "react";
+import ReactMarkdown from "react-markdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ReadingResult } from "@/types/tutor";
 
@@ -30,7 +31,9 @@ export function ReadingPanel({ result, className }: ReadingPanelProps) {
       <CardContent className="space-y-4">
         <div>
           <h4 className="font-medium mb-2">Summary</h4>
-          <p className="text-sm text-muted-foreground">{result.summary}</p>
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown>{result.summary}</ReactMarkdown>
+          </div>
         </div>
 
         <div>
