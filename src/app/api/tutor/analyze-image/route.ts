@@ -4,7 +4,7 @@ const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
 /**
  * Route handler for image analysis
- * Proxies multipart form data to FastAPI backend
+ * Converts file to base64 and sends JSON to FastAPI backend
  */
 export async function POST(request: NextRequest) {
   try {
@@ -20,14 +20,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create new FormData for backend
-    const backendFormData = new FormData();
-    backendFormData.append("file", file);
-    backendFormData.append("level", level || "3");
+    // Convert file to base64
+    const arrayBuffer = await file.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    const mimeType = file.type || "image/jpeg";
 
     const response = await fetch(`${BACKEND_URL}/api/v1/tutor/analyze-image`, {
       method: "POST",
-      body: backendFormData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image_data: base64,
+        mime_type: mimeType,
+        level: parseInt(String(level) || "3", 10),
+      }),
     });
 
     if (!response.ok) {

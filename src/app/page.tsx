@@ -7,7 +7,6 @@ import { useTutorStream } from "@/hooks/use-tutor-stream";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { DesktopLayout } from "@/components/layout/desktop-layout";
 import { MobileLayout } from "@/components/layout/mobile-layout";
-import { analyzeImage } from "@/lib/api";
 import type { Message } from "@/types/chat";
 import { toast } from "sonner";
 
@@ -88,8 +87,16 @@ export default function HomePage() {
     }
 
     try {
-      await analyzeImage(file, level);
-      toast.success("Image analyzed successfully");
+      const imageFormData = new FormData();
+      imageFormData.append("file", file);
+      imageFormData.append("level", String(level));
+
+      await startStream(() =>
+        fetch("/api/tutor/analyze-image", {
+          method: "POST",
+          body: imageFormData,
+        })
+      );
     } catch (error) {
       toast.error("Failed to analyze image");
       console.error(error);
