@@ -15,32 +15,34 @@ class Settings(BaseSettings):
 
     Required fields:
         OPENAI_API_KEY: OpenAI API key for LLM access
-        ANTHROPIC_API_KEY: Anthropic API key for Claude models
 
     Optional fields with defaults:
+        GLM_API_KEY: Zhipu AI API key for GLM models (optional, for OCR)
         SUPERVISOR_MODEL: Model for supervisor agent (default: gpt-4o-mini)
-        READING_MODEL: Model for reading comprehension (default: claude-sonnet-4-5)
-        GRAMMAR_MODEL: Model for grammar correction (default: gpt-4o)
-        VOCABULARY_MODEL: Model for vocabulary exercises (default: claude-haiku-4-5)
+        READING_MODEL: Model for reading comprehension (default: gpt-4o-mini)
+        GRAMMAR_MODEL: Model for grammar correction (default: gpt-4o-mini)
+        VOCABULARY_MODEL: Model for vocabulary exercises (default: gpt-4o-mini)
+        OCR_MODEL: Model for image OCR (default: glm-4v-flash)
         HOST: Server host address (default: 0.0.0.0)
         PORT: Server port (default: 8000)
         CORS_ORIGINS: Comma-separated list of allowed origins (default: http://localhost:3000)
         SESSION_TTL_HOURS: Session time-to-live in hours (default: 24)
     """
 
-    # LLM API Keys (REQUIRED)
+    # LLM API Keys
     OPENAI_API_KEY: str
-    ANTHROPIC_API_KEY: str
+    GLM_API_KEY: str | None = None  # For GLM/Zhipu AI models (OCR, optional)
 
     # Application Environment
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
 
-    # Model Configuration
+    # Model Configuration (all gpt-4o-mini for 95% cost reduction)
     SUPERVISOR_MODEL: str = "gpt-4o-mini"
-    READING_MODEL: str = "claude-sonnet-4-5"
-    GRAMMAR_MODEL: str = "gpt-4o"
-    VOCABULARY_MODEL: str = "claude-haiku-4-5"
+    READING_MODEL: str = "gpt-4o-mini"
+    GRAMMAR_MODEL: str = "gpt-4o-mini"
+    VOCABULARY_MODEL: str = "gpt-4o-mini"
+    OCR_MODEL: str = "glm-4v-flash"
 
     # Server Configuration
     HOST: str = "0.0.0.0"

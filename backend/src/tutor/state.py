@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import NotRequired, TypedDict
 
-from tutor.schemas import GrammarResult, ReadingResult, VocabularyResult
+from tutor.schemas import GrammarResult, ReadingResult, SupervisorAnalysis, VocabularyResult
 
 
 class TutorState(TypedDict):
@@ -30,6 +30,7 @@ class TutorState(TypedDict):
         vocabulary_result: Optional vocabulary analysis result
         extracted_text: Optional OCR-extracted text from image processing
         task_type: Type of task to execute ("analyze" | "image_process" | "chat")
+        supervisor_analysis: Optional pre-analysis result from supervisor LLM
     """
 
     # Required fields
@@ -44,3 +45,4 @@ class TutorState(TypedDict):
     grammar_result: NotRequired[GrammarResult | None]
     vocabulary_result: NotRequired[VocabularyResult | None]
     extracted_text: NotRequired[str | None]
+    supervisor_analysis: NotRequired[SupervisorAnalysis | None]

@@ -11,7 +11,7 @@ interface AnalysisViewProps {
  * Full-screen analysis results wrapper for mobile
  * Displays streaming status, errors, and tabbed analysis output
  */
-export function AnalysisView({ streamState, level }: AnalysisViewProps) {
+export function AnalysisView({ streamState }: AnalysisViewProps) {
   return (
     <div className="flex flex-col h-full p-4">
       {/* Streaming indicator */}
@@ -33,24 +33,19 @@ export function AnalysisView({ streamState, level }: AnalysisViewProps) {
         <TabbedOutput
           reading={
             streamState.readingContent
-              ? {
-                  summary: streamState.readingContent,
-                  keyPoints: [],
-                  comprehensionLevel: level,
-                }
+              ? { content: streamState.readingContent }
               : null
           }
           grammar={
             streamState.grammarContent
-              ? {
-                  issues: [],
-                  overallScore: 85,
-                  suggestions: [streamState.grammarContent],
-                }
+              ? { content: streamState.grammarContent }
               : null
           }
-          vocabulary={null}
-          vocabularyRawContent={streamState.vocabularyContent}
+          vocabulary={
+            streamState.vocabularyWords && streamState.vocabularyWords.length > 0
+              ? { words: streamState.vocabularyWords }
+              : null
+          }
         />
       </div>
     </div>

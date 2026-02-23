@@ -5,6 +5,7 @@ Tests follow the Arrange-Act-Assert pattern and verify:
 - Required fields raise ValidationError when missing
 - Default values are applied correctly
 - CORS_ORIGINS can be parsed from comma-separated string
+- GLM_API_KEY is optional
 """
 
 import os
@@ -28,11 +29,12 @@ def clean_env() -> Generator[None, None, None]:
     # Store original env vars
     original_env = {
         "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY"),
-        "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY"),
+        "GLM_API_KEY": os.environ.get("GLM_API_KEY"),
         "SUPERVISOR_MODEL": os.environ.get("SUPERVISOR_MODEL"),
         "READING_MODEL": os.environ.get("READING_MODEL"),
         "GRAMMAR_MODEL": os.environ.get("GRAMMAR_MODEL"),
         "VOCABULARY_MODEL": os.environ.get("VOCABULARY_MODEL"),
+        "OCR_MODEL": os.environ.get("OCR_MODEL"),
         "HOST": os.environ.get("HOST"),
         "PORT": os.environ.get("PORT"),
         "CORS_ORIGINS": os.environ.get("CORS_ORIGINS"),
@@ -66,25 +68,24 @@ class TestSettingsDefaultValues:
     """Tests for default value assignment in Settings."""
 
     def test_default_model_settings(self, clean_env: None) -> None:
-        """Should apply default values for model configuration when not provided."""
+        """Should apply default gpt-4o-mini for all agents when not provided."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
 
         # Act
         settings = Settings()
 
-        # Assert
+        # Assert - all agents default to gpt-4o-mini (95% cost reduction)
         assert settings.SUPERVISOR_MODEL == "gpt-4o-mini"
-        assert settings.READING_MODEL == "claude-sonnet-4-5"
-        assert settings.GRAMMAR_MODEL == "gpt-4o"
-        assert settings.VOCABULARY_MODEL == "claude-haiku-4-5"
+        assert settings.READING_MODEL == "gpt-4o-mini"
+        assert settings.GRAMMAR_MODEL == "gpt-4o-mini"
+        assert settings.VOCABULARY_MODEL == "gpt-4o-mini"
+        assert settings.OCR_MODEL == "glm-4v-flash"
 
     def test_default_server_settings(self, clean_env: None) -> None:
         """Should apply default values for server configuration when not provided."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
 
         # Act
         settings = Settings()
@@ -98,7 +99,6 @@ class TestSettingsDefaultValues:
         """Should apply default value for session TTL when not provided."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
 
         # Act
         settings = Settings()
@@ -106,14 +106,24 @@ class TestSettingsDefaultValues:
         # Assert
         assert settings.SESSION_TTL_HOURS == 24
 
+    def test_glm_api_key_is_optional(self, clean_env: None) -> None:
+        """GLM_API_KEY should be optional (defaults to None) (R5)."""
+        # Arrange - only required OPENAI key
+        os.environ["OPENAI_API_KEY"] = "test-openai-key"
+
+        # Act - should not raise even without GLM_API_KEY
+        settings = Settings()
+
+        # Assert
+        assert settings.GLM_API_KEY is None
+
 
 class TestSettingsRequiredFields:
     """Tests for required field validation in Settings."""
 
     def test_missing_openai_api_key_raises_error(self, clean_env: None) -> None:
         """Should raise ValidationError when OPENAI_API_KEY is missing."""
-        # Arrange - only set ANTHROPIC_API_KEY
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
+        # Arrange - no OPENAI_API_KEY set
 
         # Act & Assert
         with pytest.raises(ValidationError) as exc_info:
@@ -124,33 +134,16 @@ class TestSettingsRequiredFields:
         error_fields = [error["loc"][0] for error in errors]
         assert "OPENAI_API_KEY" in error_fields
 
-    def test_missing_anthropic_api_key_raises_error(self, clean_env: None) -> None:
-        """Should raise ValidationError when ANTHROPIC_API_KEY is missing."""
-        # Arrange - only set OPENAI_API_KEY
+    def test_server_starts_without_anthropic_key(self, clean_env: None) -> None:
+        """Should start successfully without ANTHROPIC_API_KEY (R6)."""
+        # Arrange - only OpenAI key, no Anthropic key
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
 
-        # Act & Assert
-        with pytest.raises(ValidationError) as exc_info:
-            Settings()
+        # Act - must not raise
+        settings = Settings()
 
-        # Verify error mentions ANTHROPIC_API_KEY
-        errors = exc_info.value.errors()
-        error_fields = [error["loc"][0] for error in errors]
-        assert "ANTHROPIC_API_KEY" in error_fields
-
-    def test_missing_both_api_keys_raises_error(self, clean_env: None) -> None:
-        """Should raise ValidationError when both API keys are missing."""
-        # Arrange - no API keys set
-
-        # Act & Assert
-        with pytest.raises(ValidationError) as exc_info:
-            Settings()
-
-        # Verify both keys are in error
-        errors = exc_info.value.errors()
-        error_fields = [error["loc"][0] for error in errors]
-        assert "OPENAI_API_KEY" in error_fields
-        assert "ANTHROPIC_API_KEY" in error_fields
+        # Assert - anthropic_api_key attribute should not exist
+        assert not hasattr(settings, "ANTHROPIC_API_KEY")
 
 
 class TestSettingsFromEnvironment:
@@ -160,39 +153,37 @@ class TestSettingsFromEnvironment:
         """Should load API keys from environment variables."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "env-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "env-anthropic-key"
+        os.environ["GLM_API_KEY"] = "env-glm-key"
 
         # Act
         settings = Settings()
 
         # Assert
         assert settings.OPENAI_API_KEY == "env-openai-key"
-        assert settings.ANTHROPIC_API_KEY == "env-anthropic-key"
+        assert settings.GLM_API_KEY == "env-glm-key"
 
     def test_loads_custom_model_from_environment(self, clean_env: None) -> None:
-        """Should load custom model settings from environment variables."""
+        """Should load custom model settings from environment variables (R1, R2)."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
-        os.environ["SUPERVISOR_MODEL"] = "custom-supervisor-model"
-        os.environ["READING_MODEL"] = "custom-reading-model"
-        os.environ["GRAMMAR_MODEL"] = "custom-grammar-model"
-        os.environ["VOCABULARY_MODEL"] = "custom-vocab-model"
+        os.environ["SUPERVISOR_MODEL"] = "gpt-4o"
+        os.environ["READING_MODEL"] = "gpt-4o"
+        os.environ["GRAMMAR_MODEL"] = "gpt-4o"
+        os.environ["VOCABULARY_MODEL"] = "gpt-4o"
 
         # Act
         settings = Settings()
 
         # Assert
-        assert settings.SUPERVISOR_MODEL == "custom-supervisor-model"
-        assert settings.READING_MODEL == "custom-reading-model"
-        assert settings.GRAMMAR_MODEL == "custom-grammar-model"
-        assert settings.VOCABULARY_MODEL == "custom-vocab-model"
+        assert settings.SUPERVISOR_MODEL == "gpt-4o"
+        assert settings.READING_MODEL == "gpt-4o"
+        assert settings.GRAMMAR_MODEL == "gpt-4o"
+        assert settings.VOCABULARY_MODEL == "gpt-4o"
 
     def test_loads_server_settings_from_environment(self, clean_env: None) -> None:
         """Should load server settings from environment variables."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
         os.environ["HOST"] = "127.0.0.1"
         os.environ["PORT"] = "9000"
 
@@ -207,7 +198,6 @@ class TestSettingsFromEnvironment:
         """Should load session TTL from environment variables."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
         os.environ["SESSION_TTL_HOURS"] = "48"
 
         # Act
@@ -224,7 +214,6 @@ class TestSettingsCorsOriginsParsing:
         """Should parse a single CORS origin from string."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
         os.environ["CORS_ORIGINS"] = "http://localhost:3000"
 
         # Act
@@ -237,7 +226,6 @@ class TestSettingsCorsOriginsParsing:
         """Should parse multiple CORS origins from comma-separated string."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
         os.environ["CORS_ORIGINS"] = "http://localhost:3000,https://example.com,https://app.example.com"
 
         # Act
@@ -254,7 +242,6 @@ class TestSettingsCorsOriginsParsing:
         """Should trim whitespace from CORS origins."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
         os.environ["CORS_ORIGINS"] = "http://localhost:3000, https://example.com , https://app.example.com"
 
         # Act
@@ -271,7 +258,6 @@ class TestSettingsCorsOriginsParsing:
         """Should use default CORS origins when not provided in environment."""
         # Arrange
         os.environ["OPENAI_API_KEY"] = "test-openai-key"
-        os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
 
         # Act
         settings = Settings()

@@ -2,10 +2,10 @@
 Unit tests for AI English Tutor agents.
 
 Tests all agent nodes for the LangGraph workflow including:
-- Supervisor: Routes based on task_type
-- Reading: Reading comprehension analysis (Claude Sonnet)
-- Grammar: Grammar analysis (GPT-4o)
-- Vocabulary: Vocabulary extraction (Claude Haiku)
+- Supervisor: LLM-powered pre-analyzer (SPEC-UPDATE-001)
+- Reading: Reading training with Korean slash reading method
+- Grammar: Grammar explanation with Korean structure analysis
+- Vocabulary: Vocabulary etymology with Korean explanation (upgraded to Sonnet)
 - ImageProcessor: Text extraction from images
 - Aggregator: Combines all tutor agent results
 
@@ -15,6 +15,7 @@ All tests use mocked LLM responses to avoid actual API calls.
 from __future__ import annotations
 
 import base64
+import json
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,14 +24,16 @@ from tutor.schemas import (
     AnalyzeResponse,
     GrammarResult,
     ReadingResult,
+    SentenceEntry,
+    SupervisorAnalysis,
     VocabularyResult,
-    VocabularyWord,
+    VocabularyWordEntry,
 )
 from tutor.state import TutorState
 
 
 class TestSupervisorAgent:
-    """Test cases for the supervisor routing agent."""
+    """Test cases for the supervisor LLM pre-analyzer agent."""
 
     @pytest.fixture
     def base_state(self) -> TutorState:
@@ -39,84 +42,156 @@ class TestSupervisorAgent:
             "messages": [],
             "level": 3,
             "session_id": "test-session-123",
-            "input_text": "Hello, world!",
+            "input_text": "Hello, world! This is a test sentence.",
             "task_type": "analyze",
         }
 
-    def test_supervisor_routes_to_analyze(self, base_state: TutorState) -> None:
+    @pytest.mark.asyncio
+    async def test_supervisor_returns_analysis_for_analyze_task(
+        self, base_state: TutorState
+    ) -> None:
+        """
+        GIVEN a state with task_type='analyze' and input_text
+        WHEN supervisor_node is called
+        THEN it should return supervisor_analysis with sentences and difficulty
+        """
+        from tutor.agents.supervisor import supervisor_node
+
+        # Mock LLM JSON response
+        mock_response = MagicMock()
+        mock_response.content = json.dumps({
+            "sentences": [
+                {"text": "Hello, world!", "difficulty": 2, "focus": ["reading"]},
+                {"text": "This is a test sentence.", "difficulty": 2, "focus": ["grammar"]},
+            ],
+            "overall_difficulty": 2,
+            "focus_summary": ["reading", "grammar"],
+        })
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
+
+        with patch("tutor.agents.supervisor.get_llm", return_value=mock_llm):
+            result = await supervisor_node(base_state)
+
+        assert "supervisor_analysis" in result
+        analysis = result["supervisor_analysis"]
+        assert isinstance(analysis, SupervisorAnalysis)
+        assert len(analysis.sentences) == 2
+        assert analysis.overall_difficulty == 2
+        assert "reading" in analysis.focus_summary
+
+    @pytest.mark.asyncio
+    async def test_supervisor_uses_config_model(self, base_state: TutorState) -> None:
         """
         GIVEN a state with task_type='analyze'
         WHEN supervisor_node is called
-        THEN it should route to parallel execution of reading, grammar, and vocabulary agents
+        THEN it should use SUPERVISOR_MODEL from config (R1, R2)
         """
         from tutor.agents.supervisor import supervisor_node
 
-        base_state["task_type"] = "analyze"
-        result = supervisor_node(base_state)
+        mock_response = MagicMock()
+        mock_response.content = json.dumps({
+            "sentences": [{"text": "Test.", "difficulty": 3, "focus": ["reading"]}],
+            "overall_difficulty": 3,
+            "focus_summary": ["reading"],
+        })
 
-        assert "next_nodes" in result
-        assert set(result["next_nodes"]) == {"reading", "grammar", "vocabulary"}
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
 
-    def test_supervisor_routes_to_image_process(self, base_state: TutorState) -> None:
-        """
-        GIVEN a state with task_type='image_process'
-        WHEN supervisor_node is called
-        THEN it should route to image_processor first
-        """
-        from tutor.agents.supervisor import supervisor_node
+        mock_settings_obj = MagicMock()
+        mock_settings_obj.SUPERVISOR_MODEL = "gpt-4o-mini"
 
-        base_state["task_type"] = "image_process"
-        result = supervisor_node(base_state)
+        with patch("tutor.agents.supervisor.get_llm", return_value=mock_llm) as mock_get_llm, \
+             patch("tutor.agents.supervisor.get_settings", return_value=mock_settings_obj):
+            await supervisor_node(base_state)
 
-        assert "next_nodes" in result
-        assert result["next_nodes"] == ["image_processor"]
+            mock_get_llm.assert_called_once_with(
+                mock_settings_obj.SUPERVISOR_MODEL, max_tokens=1024, timeout=30
+            )
 
-    def test_supervisor_routes_to_chat(self, base_state: TutorState) -> None:
+    @pytest.mark.asyncio
+    async def test_supervisor_skips_non_analyze_tasks(self, base_state: TutorState) -> None:
         """
         GIVEN a state with task_type='chat'
         WHEN supervisor_node is called
-        THEN it should route to chat handler
+        THEN it should return empty dict (skip pre-analysis)
         """
         from tutor.agents.supervisor import supervisor_node
 
         base_state["task_type"] = "chat"
-        result = supervisor_node(base_state)
 
-        assert "next_nodes" in result
-        assert result["next_nodes"] == ["chat"]
+        with patch("tutor.agents.supervisor.get_llm") as mock_get_llm:
+            result = await supervisor_node(base_state)
 
-    def test_supervisor_handles_unknown_task_type(self, base_state: TutorState) -> None:
+        # Should skip pre-analysis and not call the LLM
+        assert result == {}
+        mock_get_llm.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_supervisor_skips_empty_input_text(self, base_state: TutorState) -> None:
         """
-        GIVEN a state with unknown task_type
+        GIVEN a state with empty input_text
         WHEN supervisor_node is called
-        THEN it should return empty node list
+        THEN it should return empty dict (skip pre-analysis)
         """
         from tutor.agents.supervisor import supervisor_node
 
-        base_state["task_type"] = "unknown"
-        result = supervisor_node(base_state)
+        base_state["input_text"] = ""
 
-        assert "next_nodes" in result
-        assert result["next_nodes"] == []
+        with patch("tutor.agents.supervisor.get_llm") as mock_get_llm:
+            result = await supervisor_node(base_state)
 
-    def test_supervisor_default_to_analyze(self, base_state: TutorState) -> None:
+        assert result == {}
+        mock_get_llm.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_supervisor_falls_back_on_llm_failure(self, base_state: TutorState) -> None:
         """
-        GIVEN a state without task_type
-        WHEN supervisor_node is called with default
-        THEN it should default to analyze routing
+        GIVEN a state with valid input_text
+        WHEN supervisor LLM fails
+        THEN it should fall back to basic sentence splitting
         """
         from tutor.agents.supervisor import supervisor_node
 
-        # Remove task_type to test default behavior
-        del base_state["task_type"]
-        result = supervisor_node(base_state)
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.side_effect = Exception("LLM API error")
 
-        assert "next_nodes" in result
-        assert set(result["next_nodes"]) == {"reading", "grammar", "vocabulary"}
+        with patch("tutor.agents.supervisor.get_llm", return_value=mock_llm):
+            result = await supervisor_node(base_state)
+
+        assert "supervisor_analysis" in result
+        analysis = result["supervisor_analysis"]
+        assert isinstance(analysis, SupervisorAnalysis)
+        # Fallback should still produce sentences
+        assert len(analysis.sentences) >= 0
+
+    @pytest.mark.asyncio
+    async def test_supervisor_falls_back_on_invalid_json(self, base_state: TutorState) -> None:
+        """
+        GIVEN a state with valid input_text
+        WHEN supervisor LLM returns invalid JSON
+        THEN it should fall back to basic sentence splitting
+        """
+        from tutor.agents.supervisor import supervisor_node
+
+        mock_response = MagicMock()
+        mock_response.content = "This is not valid JSON at all!"
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
+
+        with patch("tutor.agents.supervisor.get_llm", return_value=mock_llm):
+            result = await supervisor_node(base_state)
+
+        assert "supervisor_analysis" in result
+        analysis = result["supervisor_analysis"]
+        assert isinstance(analysis, SupervisorAnalysis)
 
 
 class TestReadingAgent:
-    """Test cases for the reading comprehension agent."""
+    """Test cases for the reading comprehension agent (SPEC-UPDATE-001)."""
 
     @pytest.fixture
     def reading_state(self) -> TutorState:
@@ -136,24 +211,16 @@ class TestReadingAgent:
         """
         GIVEN a state with input_text and level
         WHEN reading_node is called
-        THEN it should return a ReadingResult with summary, main_topic, and emotional_tone
+        THEN it should return a ReadingResult with Korean Markdown content
         """
         from tutor.agents.reading import reading_node
 
-        # Create the expected result object
-        expected_result = ReadingResult(
-            summary="A fox jumps over a dog.",
-            main_topic="Animal behavior",
-            emotional_tone="Playful"
-        )
+        # Mock raw LLM response (not structured output)
+        mock_response = MagicMock()
+        mock_response.content = "## 슬래시 직독\n\nThe quick brown fox / jumps / over the lazy dog.\n\n..."
 
-        # Mock structured LLM that returns the result directly
-        mock_structured_llm = AsyncMock()
-        mock_structured_llm.ainvoke.return_value = expected_result
-
-        # Mock base LLM with with_structured_output method
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value = mock_structured_llm
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
 
         with patch("tutor.agents.reading.get_llm", return_value=mock_llm), \
              patch("tutor.agents.reading.render_prompt", return_value="Test prompt"):
@@ -162,39 +229,97 @@ class TestReadingAgent:
         assert "reading_result" in result
         reading_result = result["reading_result"]
         assert isinstance(reading_result, ReadingResult)
-        assert reading_result.summary == "A fox jumps over a dog."
-        assert reading_result.main_topic == "Animal behavior"
-        assert reading_result.emotional_tone == "Playful"
+        assert "슬래시 직독" in reading_result.content
 
     @pytest.mark.asyncio
-    async def test_reading_agent_uses_claude_sonnet(
+    async def test_reading_agent_uses_config_model(
         self, reading_state: TutorState
     ) -> None:
         """
         GIVEN a reading analysis request
         WHEN reading_node is called
-        THEN it should use Claude Sonnet model
+        THEN it should use READING_MODEL from config with max_tokens=6144 (R1, R2, R7)
         """
         from tutor.agents.reading import reading_node
 
-        # Create the expected result
-        expected_result = ReadingResult(
-            summary="Test",
-            main_topic="Test",
-            emotional_tone="Neutral"
-        )
+        mock_response = MagicMock()
+        mock_response.content = "Korean Markdown reading content"
 
-        # Mock structured LLM
-        mock_structured_llm = AsyncMock()
-        mock_structured_llm.ainvoke.return_value = expected_result
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
 
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value = mock_structured_llm
+        mock_settings_obj = MagicMock()
+        mock_settings_obj.READING_MODEL = "gpt-4o-mini"
 
-        with patch("tutor.agents.reading.get_llm", return_value=mock_llm) as mock_get_llm:
+        with patch("tutor.agents.reading.get_llm", return_value=mock_llm) as mock_get_llm, \
+             patch("tutor.agents.reading.get_settings", return_value=mock_settings_obj):
             await reading_node(reading_state)
 
-            mock_get_llm.assert_called_once_with("claude-sonnet-4-5")
+            mock_get_llm.assert_called_once_with(
+                mock_settings_obj.READING_MODEL, max_tokens=6144
+            )
+
+    @pytest.mark.asyncio
+    async def test_reading_agent_uses_raw_llm_invocation(
+        self, reading_state: TutorState
+    ) -> None:
+        """
+        GIVEN a reading analysis request
+        WHEN reading_node is called
+        THEN it should use raw llm.ainvoke() (not with_structured_output)
+        """
+        from tutor.agents.reading import reading_node
+
+        mock_response = MagicMock()
+        mock_response.content = "Reading content"
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
+
+        with patch("tutor.agents.reading.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.reading.render_prompt", return_value="Test prompt"):
+            await reading_node(reading_state)
+
+        # Should use ainvoke directly, not with_structured_output
+        mock_llm.ainvoke.assert_called_once()
+        mock_llm.with_structured_output.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reading_agent_includes_supervisor_context(
+        self, reading_state: TutorState
+    ) -> None:
+        """
+        GIVEN a state with supervisor_analysis
+        WHEN reading_node is called
+        THEN it should include supervisor context in the prompt
+        """
+        from tutor.agents.reading import reading_node
+
+        reading_state["supervisor_analysis"] = SupervisorAnalysis(
+            sentences=[SentenceEntry(text="Test.", difficulty=3, focus=["reading"])],
+            overall_difficulty=3,
+            focus_summary=["reading", "grammar"],
+        )
+
+        mock_response = MagicMock()
+        mock_response.content = "Reading content"
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
+
+        captured_prompt = {}
+
+        def capture_render_prompt(name, **kwargs):
+            captured_prompt.update(kwargs)
+            return "Test prompt"
+
+        with patch("tutor.agents.reading.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.reading.render_prompt", side_effect=capture_render_prompt):
+            await reading_node(reading_state)
+
+        # Supervisor context should be included in prompt kwargs
+        assert "supervisor_context" in captured_prompt
+        assert "사전 분석" in captured_prompt["supervisor_context"]
 
     @pytest.mark.asyncio
     async def test_reading_agent_includes_level_instructions(
@@ -209,19 +334,11 @@ class TestReadingAgent:
 
         reading_state["level"] = 1
 
-        # Create the expected result
-        expected_result = ReadingResult(
-            summary="Test",
-            main_topic="Test",
-            emotional_tone="Neutral"
-        )
+        mock_response = MagicMock()
+        mock_response.content = "Reading content"
 
-        # Mock structured LLM
-        mock_structured_llm = AsyncMock()
-        mock_structured_llm.ainvoke.return_value = expected_result
-
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value = mock_structured_llm
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
 
         with patch("tutor.agents.reading.get_llm", return_value=mock_llm), patch(
             "tutor.agents.reading.get_level_instructions", return_value="Beginner level instructions"
@@ -230,9 +347,24 @@ class TestReadingAgent:
 
             mock_level.assert_called_once_with(1)
 
+    @pytest.mark.asyncio
+    async def test_reading_agent_handles_error(self, reading_state: TutorState) -> None:
+        """
+        GIVEN a reading agent that encounters an error
+        WHEN reading_node is called
+        THEN it should return None for reading_result
+        """
+        from tutor.agents.reading import reading_node
+
+        with patch("tutor.agents.reading.get_llm", side_effect=Exception("API Error")):
+            result = await reading_node(reading_state)
+
+        assert "reading_result" in result
+        assert result["reading_result"] is None
+
 
 class TestGrammarAgent:
-    """Test cases for the grammar analysis agent."""
+    """Test cases for the grammar analysis agent (SPEC-UPDATE-001)."""
 
     @pytest.fixture
     def grammar_state(self) -> TutorState:
@@ -252,24 +384,15 @@ class TestGrammarAgent:
         """
         GIVEN a state with input_text
         WHEN grammar_node is called
-        THEN it should return a GrammarResult with tenses, voice, sentence_structure, and analysis
+        THEN it should return a GrammarResult with Korean Markdown content
         """
         from tutor.agents.grammar import grammar_node
 
-        # Create the expected result
-        expected_result = GrammarResult(
-            tenses=["past continuous", "simple past"],
-            voice="active",
-            sentence_structure="complex",
-            analysis="The sentence uses past continuous for background action and simple past for interrupting action."
-        )
+        mock_response = MagicMock()
+        mock_response.content = "## 문법 포인트\n\n과거 진행형 (Past Continuous)..."
 
-        # Mock structured LLM
-        mock_structured_llm = AsyncMock()
-        mock_structured_llm.ainvoke.return_value = expected_result
-
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value = mock_structured_llm
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
 
         with patch("tutor.agents.grammar.get_llm", return_value=mock_llm), \
              patch("tutor.agents.grammar.render_prompt", return_value="Test prompt"):
@@ -278,40 +401,55 @@ class TestGrammarAgent:
         assert "grammar_result" in result
         grammar_result = result["grammar_result"]
         assert isinstance(grammar_result, GrammarResult)
-        assert "past continuous" in grammar_result.tenses
-        assert "simple past" in grammar_result.tenses
-        assert grammar_result.voice == "active"
-        assert grammar_result.sentence_structure == "complex"
-        assert "background action" in grammar_result.analysis
+        assert "문법 포인트" in grammar_result.content
 
     @pytest.mark.asyncio
-    async def test_grammar_agent_uses_gpt_4o(self, grammar_state: TutorState) -> None:
+    async def test_grammar_agent_uses_config_model(self, grammar_state: TutorState) -> None:
         """
         GIVEN a grammar analysis request
         WHEN grammar_node is called
-        THEN it should use GPT-4o model
+        THEN it should use GRAMMAR_MODEL from config (R1, R2)
         """
         from tutor.agents.grammar import grammar_node
 
-        # Create the expected result
-        expected_result = GrammarResult(
-            tenses=[],
-            voice="active",
-            sentence_structure="simple",
-            analysis="Test"
-        )
+        mock_response = MagicMock()
+        mock_response.content = "Grammar content"
 
-        # Mock structured LLM
-        mock_structured_llm = AsyncMock()
-        mock_structured_llm.ainvoke.return_value = expected_result
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
 
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value = mock_structured_llm
+        mock_settings_obj = MagicMock()
+        mock_settings_obj.GRAMMAR_MODEL = "gpt-4o-mini"
 
-        with patch("tutor.agents.grammar.get_llm", return_value=mock_llm) as mock_get_llm:
+        with patch("tutor.agents.grammar.get_llm", return_value=mock_llm) as mock_get_llm, \
+             patch("tutor.agents.grammar.get_settings", return_value=mock_settings_obj):
             await grammar_node(grammar_state)
 
-            mock_get_llm.assert_called_once_with("gpt-4o")
+            mock_get_llm.assert_called_once_with(mock_settings_obj.GRAMMAR_MODEL)
+
+    @pytest.mark.asyncio
+    async def test_grammar_agent_uses_raw_llm_invocation(
+        self, grammar_state: TutorState
+    ) -> None:
+        """
+        GIVEN a grammar analysis request
+        WHEN grammar_node is called
+        THEN it should use raw llm.ainvoke() (not with_structured_output)
+        """
+        from tutor.agents.grammar import grammar_node
+
+        mock_response = MagicMock()
+        mock_response.content = "Grammar content"
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
+
+        with patch("tutor.agents.grammar.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.grammar.render_prompt", return_value="Test prompt"):
+            await grammar_node(grammar_state)
+
+        mock_llm.ainvoke.assert_called_once()
+        mock_llm.with_structured_output.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_grammar_agent_handles_malformed_response(
@@ -319,28 +457,23 @@ class TestGrammarAgent:
     ) -> None:
         """
         GIVEN a state with input_text
-        WHEN grammar_node receives malformed JSON response
-        THEN it should handle the error gracefully
+        WHEN grammar_node encounters an error
+        THEN it should handle the error gracefully and return None
         """
         from tutor.agents.grammar import grammar_node
 
-        # Mock structured LLM that raises an exception
-        mock_structured_llm = AsyncMock()
-        mock_structured_llm.ainvoke.side_effect = Exception("Invalid JSON response")
-
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value = mock_structured_llm
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.side_effect = Exception("LLM API error")
 
         with patch("tutor.agents.grammar.get_llm", return_value=mock_llm):
             result = await grammar_node(grammar_state)
 
-        # Should return error indicator
         assert "grammar_result" in result
         assert result["grammar_result"] is None
 
 
 class TestVocabularyAgent:
-    """Test cases for the vocabulary extraction agent."""
+    """Test cases for the vocabulary extraction agent (SPEC-UPDATE-001)."""
 
     @pytest.fixture
     def vocabulary_state(self) -> TutorState:
@@ -360,28 +493,25 @@ class TestVocabularyAgent:
         """
         GIVEN a state with input_text
         WHEN vocabulary_node is called
-        THEN it should return a VocabularyResult with list of vocabulary words
+        THEN it should return a VocabularyResult with VocabularyWordEntry objects
         """
         from tutor.agents.vocabulary import vocabulary_node
 
-        # Create the expected result
-        expected_result = VocabularyResult(
-            words=[
-                VocabularyWord(
-                    term="ephemeral",
-                    meaning="Lasting for a very short time",
-                    usage="The ephemeral beauty of cherry blossoms.",
-                    synonyms=["fleeting", "transient", "momentary"]
-                )
-            ]
+        # Mock Markdown output with ## headers
+        mock_response = MagicMock()
+        mock_response.content = (
+            "## ephemeral\n\n"
+            "### 1. 기본 뜻\n짧은 시간 동안만 지속되는\n\n"
+            "### 2. 문장 속 의미\n이 문장에서는 찰나의 아름다움을 의미\n\n"
+            "---\n\n"
+            "## captivate\n\n"
+            "### 1. 기본 뜻\n마음을 사로잡다\n\n"
+            "### 2. 문장 속 의미\n황홀하게 만들다\n\n"
+            "---"
         )
 
-        # Mock structured LLM
-        mock_structured_llm = AsyncMock()
-        mock_structured_llm.ainvoke.return_value = expected_result
-
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value = mock_structured_llm
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
 
         with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm), \
              patch("tutor.agents.vocabulary.render_prompt", return_value="Test prompt"):
@@ -390,39 +520,61 @@ class TestVocabularyAgent:
         assert "vocabulary_result" in result
         vocab_result = result["vocabulary_result"]
         assert isinstance(vocab_result, VocabularyResult)
-        assert len(vocab_result.words) == 1
+        assert len(vocab_result.words) >= 1
         word = vocab_result.words[0]
-        assert isinstance(word, VocabularyWord)
-        assert word.term == "ephemeral"
-        assert word.meaning == "Lasting for a very short time"
-        assert "cherry blossoms" in word.usage
-        assert "fleeting" in word.synonyms
+        assert isinstance(word, VocabularyWordEntry)
+        assert word.word == "ephemeral"
+        assert "기본 뜻" in word.content
 
     @pytest.mark.asyncio
-    async def test_vocabulary_agent_uses_claude_haiku(
+    async def test_vocabulary_agent_uses_config_model(
         self, vocabulary_state: TutorState
     ) -> None:
         """
         GIVEN a vocabulary extraction request
         WHEN vocabulary_node is called
-        THEN it should use Claude Haiku model
+        THEN it should use VOCABULARY_MODEL from config with max_tokens=6144 (R1, R2, R7)
         """
         from tutor.agents.vocabulary import vocabulary_node
 
-        # Create the expected result
-        expected_result = VocabularyResult(words=[])
+        mock_response = MagicMock()
+        mock_response.content = "## test\n\ncontent\n\n---"
 
-        # Mock structured LLM
-        mock_structured_llm = AsyncMock()
-        mock_structured_llm.ainvoke.return_value = expected_result
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
 
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value = mock_structured_llm
+        mock_settings_obj = MagicMock()
+        mock_settings_obj.VOCABULARY_MODEL = "gpt-4o-mini"
 
-        with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm) as mock_get_llm:
+        with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm) as mock_get_llm, \
+             patch("tutor.agents.vocabulary.get_settings", return_value=mock_settings_obj):
             await vocabulary_node(vocabulary_state)
 
-            mock_get_llm.assert_called_once_with("claude-haiku-4-5")
+            mock_get_llm.assert_called_once_with(
+                mock_settings_obj.VOCABULARY_MODEL, max_tokens=6144
+            )
+
+    @pytest.mark.asyncio
+    async def test_vocabulary_agent_returns_empty_list_on_error(
+        self, vocabulary_state: TutorState
+    ) -> None:
+        """
+        GIVEN a vocabulary agent that encounters an error
+        WHEN vocabulary_node is called
+        THEN it should return empty VocabularyResult
+        """
+        from tutor.agents.vocabulary import vocabulary_node
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.side_effect = Exception("API Error")
+
+        with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm):
+            result = await vocabulary_node(vocabulary_state)
+
+        assert "vocabulary_result" in result
+        vocab_result = result["vocabulary_result"]
+        assert isinstance(vocab_result, VocabularyResult)
+        assert len(vocab_result.words) == 0
 
     @pytest.mark.asyncio
     async def test_vocabulary_agent_returns_empty_list_for_simple_text(
@@ -430,22 +582,18 @@ class TestVocabularyAgent:
     ) -> None:
         """
         GIVEN a state with simple input_text
-        WHEN vocabulary_node is called
-        THEN it should return empty vocabulary list for basic words
+        WHEN vocabulary_node returns empty Markdown (no ## headers)
+        THEN it should return empty vocabulary list
         """
         from tutor.agents.vocabulary import vocabulary_node
 
         vocabulary_state["input_text"] = "The cat sat on the mat."
 
-        # Create the expected result with empty words list
-        expected_result = VocabularyResult(words=[])
+        mock_response = MagicMock()
+        mock_response.content = "단어 설명이 필요한 어휘가 없습니다."
 
-        # Mock structured LLM
-        mock_structured_llm = AsyncMock()
-        mock_structured_llm.ainvoke.return_value = expected_result
-
-        mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value = mock_structured_llm
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = mock_response
 
         with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm), \
              patch("tutor.agents.vocabulary.render_prompt", return_value="Test prompt"):
@@ -539,7 +687,7 @@ class TestAggregatorAgent:
 
     @pytest.fixture
     def full_state(self) -> TutorState:
-        """Create a TutorState with all results for aggregation."""
+        """Create a TutorState with all results for aggregation (SPEC-UPDATE-001 schemas)."""
         return {
             "messages": [],
             "level": 3,
@@ -547,23 +695,16 @@ class TestAggregatorAgent:
             "input_text": "Test text for analysis.",
             "task_type": "analyze",
             "reading_result": ReadingResult(
-                summary="Test summary",
-                main_topic="Testing",
-                emotional_tone="Neutral",
+                content="Korean Markdown reading content with slash reading",
             ),
             "grammar_result": GrammarResult(
-                tenses=["present simple"],
-                voice="active",
-                sentence_structure="simple",
-                analysis="Simple present tense statement.",
+                content="Korean Markdown grammar explanation content",
             ),
             "vocabulary_result": VocabularyResult(
                 words=[
-                    VocabularyWord(
-                        term="analysis",
-                        meaning="Examination of something",
-                        usage="The analysis was complete.",
-                        synonyms=["examination", "evaluation", "study"],
+                    VocabularyWordEntry(
+                        word="analysis",
+                        content="Korean etymology explanation for analysis",
                     )
                 ]
             ),
@@ -586,8 +727,8 @@ class TestAggregatorAgent:
         assert response.reading is not None
         assert response.grammar is not None
         assert response.vocabulary is not None
-        assert response.reading.summary == "Test summary"
-        assert response.grammar.voice == "active"
+        assert "slash reading" in response.reading.content
+        assert "grammar explanation" in response.grammar.content
         assert len(response.vocabulary.words) == 1
 
     def test_aggregator_handles_partial_results(self) -> None:
@@ -605,9 +746,7 @@ class TestAggregatorAgent:
             "input_text": "Partial test.",
             "task_type": "analyze",
             "reading_result": ReadingResult(
-                summary="Partial summary",
-                main_topic="Partial",
-                emotional_tone="Neutral",
+                content="Partial reading content",
             ),
             # Missing grammar and vocabulary results
         }

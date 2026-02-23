@@ -13,8 +13,10 @@ from tutor.schemas import (
     ChatRequest,
     GrammarResult,
     ReadingResult,
+    SentenceEntry,
+    SupervisorAnalysis,
     VocabularyResult,
-    VocabularyWord,
+    VocabularyWordEntry,
 )
 
 
@@ -154,106 +156,170 @@ class TestChatRequest:
         assert any(e["loc"] == ("level",) for e in errors)
 
 
+class TestSentenceEntry:
+    """Test SentenceEntry schema for supervisor pre-analysis."""
+
+    def test_sentence_entry_valid(self):
+        """Test valid SentenceEntry with all fields."""
+        entry = SentenceEntry(
+            text="The quick brown fox jumps over the lazy dog.",
+            difficulty=3,
+            focus=["reading", "vocabulary"],
+        )
+        assert entry.text == "The quick brown fox jumps over the lazy dog."
+        assert entry.difficulty == 3
+        assert entry.focus == ["reading", "vocabulary"]
+
+    def test_sentence_entry_default_focus(self):
+        """Test SentenceEntry has empty focus list by default."""
+        entry = SentenceEntry(text="Test sentence.", difficulty=2)
+        assert entry.focus == []
+
+    def test_sentence_entry_difficulty_range(self):
+        """Test SentenceEntry validates difficulty range 1-5."""
+        for difficulty in [1, 2, 3, 4, 5]:
+            entry = SentenceEntry(text="Test.", difficulty=difficulty)
+            assert entry.difficulty == difficulty
+
+    def test_sentence_entry_invalid_difficulty_low(self):
+        """Test SentenceEntry rejects difficulty below 1."""
+        with pytest.raises(ValidationError):
+            SentenceEntry(text="Test.", difficulty=0)
+
+    def test_sentence_entry_invalid_difficulty_high(self):
+        """Test SentenceEntry rejects difficulty above 5."""
+        with pytest.raises(ValidationError):
+            SentenceEntry(text="Test.", difficulty=6)
+
+
+class TestSupervisorAnalysis:
+    """Test SupervisorAnalysis schema for supervisor pre-analysis results."""
+
+    def test_supervisor_analysis_valid(self):
+        """Test valid SupervisorAnalysis with all fields."""
+        sentences = [
+            SentenceEntry(text="First sentence.", difficulty=2, focus=["reading"]),
+            SentenceEntry(text="Second sentence.", difficulty=4, focus=["grammar"]),
+        ]
+        analysis = SupervisorAnalysis(
+            sentences=sentences,
+            overall_difficulty=3,
+            focus_summary=["grammar", "reading"],
+        )
+        assert len(analysis.sentences) == 2
+        assert analysis.overall_difficulty == 3
+        assert analysis.focus_summary == ["grammar", "reading"]
+
+    def test_supervisor_analysis_defaults(self):
+        """Test SupervisorAnalysis has appropriate defaults."""
+        analysis = SupervisorAnalysis()
+        assert analysis.sentences == []
+        assert analysis.overall_difficulty == 3
+        assert analysis.focus_summary == []
+
+    def test_supervisor_analysis_overall_difficulty_range(self):
+        """Test SupervisorAnalysis validates overall_difficulty range 1-5."""
+        for difficulty in [1, 2, 3, 4, 5]:
+            analysis = SupervisorAnalysis(overall_difficulty=difficulty)
+            assert analysis.overall_difficulty == difficulty
+
+    def test_supervisor_analysis_invalid_difficulty(self):
+        """Test SupervisorAnalysis rejects invalid overall_difficulty."""
+        with pytest.raises(ValidationError):
+            SupervisorAnalysis(overall_difficulty=0)
+        with pytest.raises(ValidationError):
+            SupervisorAnalysis(overall_difficulty=6)
+
+
 class TestReadingResult:
-    """Test ReadingResult schema structure."""
+    """Test ReadingResult schema structure (content-based, SPEC-UPDATE-001)."""
 
     def test_reading_result_structure(self):
-        """Test ReadingResult creates valid structure with all fields."""
+        """Test ReadingResult creates valid structure with content field."""
         result = ReadingResult(
-            summary="The text discusses climate change effects.",
-            main_topic="Climate Change",
-            emotional_tone="concerned",
+            content="## 문장 분석\n\nThe quick brown fox / jumps / over the lazy dog.\n\n..."
         )
-
-        assert result.summary == "The text discusses climate change effects."
-        assert result.main_topic == "Climate Change"
-        assert result.emotional_tone == "concerned"
+        assert "문장 분석" in result.content
 
     def test_reading_result_serialization(self):
         """Test ReadingResult can be serialized to JSON."""
-        result = ReadingResult(
-            summary="Test summary", main_topic="Test Topic", emotional_tone="neutral"
-        )
+        result = ReadingResult(content="Korean Markdown reading content here.")
 
         data = result.model_dump()
 
-        assert data == {
-            "summary": "Test summary",
-            "main_topic": "Test Topic",
-            "emotional_tone": "neutral",
-        }
+        assert data == {"content": "Korean Markdown reading content here."}
+
+    def test_reading_result_missing_content(self):
+        """Test ReadingResult raises ValidationError without content."""
+        with pytest.raises(ValidationError):
+            ReadingResult()
 
 
 class TestGrammarResult:
-    """Test GrammarResult schema structure."""
+    """Test GrammarResult schema structure (content-based, SPEC-UPDATE-001)."""
 
     def test_grammar_result_structure(self):
-        """Test GrammarResult creates valid structure with all fields."""
+        """Test GrammarResult creates valid structure with content field."""
         result = GrammarResult(
-            tenses=["present simple", "past simple"],
-            voice="active",
-            sentence_structure="compound",
-            analysis="The text uses simple sentence structures with clear tense usage.",
+            content="## 문법 분석\n\n**문법 포인트**: 현재완료..."
         )
-
-        assert result.tenses == ["present simple", "past simple"]
-        assert result.voice == "active"
-        assert result.sentence_structure == "compound"
-        assert result.analysis == "The text uses simple sentence structures with clear tense usage."
-
-    def test_grammar_result_empty_tenses(self):
-        """Test GrammarResult accepts empty tenses list."""
-        result = GrammarResult(
-            tenses=[], voice="active", sentence_structure="simple", analysis="No tenses found."
-        )
-
-        assert result.tenses == []
+        assert "문법 분석" in result.content
 
     def test_grammar_result_serialization(self):
         """Test GrammarResult can be serialized to JSON."""
-        result = GrammarResult(
-            tenses=["present perfect"],
-            voice="passive",
-            sentence_structure="complex",
-            analysis="Test",
-        )
+        result = GrammarResult(content="Korean Markdown grammar content here.")
 
         data = result.model_dump()
 
-        assert data == {
-            "tenses": ["present perfect"],
-            "voice": "passive",
-            "sentence_structure": "complex",
-            "analysis": "Test",
-        }
+        assert data == {"content": "Korean Markdown grammar content here."}
+
+    def test_grammar_result_missing_content(self):
+        """Test GrammarResult raises ValidationError without content."""
+        with pytest.raises(ValidationError):
+            GrammarResult()
+
+
+class TestVocabularyWordEntry:
+    """Test VocabularyWordEntry schema structure (SPEC-UPDATE-001)."""
+
+    def test_vocabulary_word_entry_valid(self):
+        """Test VocabularyWordEntry has word and content fields."""
+        entry = VocabularyWordEntry(
+            word="ephemeral",
+            content="### 1. 기본 뜻\n짧은 시간 동안만 지속되는\n\n### 2. 문장 속 의미\n...",
+        )
+        assert entry.word == "ephemeral"
+        assert "기본 뜻" in entry.content
+
+    def test_vocabulary_word_entry_serialization(self):
+        """Test VocabularyWordEntry can be serialized to JSON."""
+        entry = VocabularyWordEntry(word="test", content="Test content")
+        data = entry.model_dump()
+        assert data == {"word": "test", "content": "Test content"}
+
+    def test_vocabulary_word_entry_missing_fields(self):
+        """Test VocabularyWordEntry raises ValidationError without required fields."""
+        with pytest.raises(ValidationError):
+            VocabularyWordEntry(word="test")  # missing content
+        with pytest.raises(ValidationError):
+            VocabularyWordEntry(content="content")  # missing word
 
 
 class TestVocabularyResult:
     """Test VocabularyResult schema structure."""
 
     def test_vocabulary_result_word_list(self):
-        """Test VocabularyResult with multiple vocabulary words."""
+        """Test VocabularyResult with multiple vocabulary word entries."""
         words = [
-            VocabularyWord(
-                term="ephemeral",
-                meaning="lasting for a very short time",
-                usage="The ephemeral beauty of cherry blossoms.",
-                synonyms=["transient", "fleeting", "short-lived"],
-            ),
-            VocabularyWord(
-                term="ubiquitous",
-                meaning="present, appearing, or found everywhere",
-                usage="Smartphones have become ubiquitous in modern society.",
-                synonyms=["omnipresent", "pervasive", "universal"],
-            ),
+            VocabularyWordEntry(word="ephemeral", content="Korean etymology content for ephemeral"),
+            VocabularyWordEntry(word="ubiquitous", content="Korean etymology content for ubiquitous"),
         ]
 
         result = VocabularyResult(words=words)
 
         assert len(result.words) == 2
-        assert result.words[0].term == "ephemeral"
-        assert result.words[1].term == "ubiquitous"
-        assert result.words[0].synonyms == ["transient", "fleeting", "short-lived"]
+        assert result.words[0].word == "ephemeral"
+        assert result.words[1].word == "ubiquitous"
 
     def test_vocabulary_result_empty_list(self):
         """Test VocabularyResult with empty word list."""
@@ -261,30 +327,13 @@ class TestVocabularyResult:
 
         assert result.words == []
 
-    def test_vocabulary_word_structure(self):
-        """Test VocabularyWord has all required fields."""
-        word = VocabularyWord(
-            term="test",
-            meaning="a procedure intended to establish the quality",
-            usage="This is a test.",
-            synonyms=["examination", "trial", "experiment"],
+    def test_vocabulary_result_serialization(self):
+        """Test VocabularyResult can be serialized to JSON."""
+        result = VocabularyResult(
+            words=[VocabularyWordEntry(word="test", content="Test content")]
         )
-
-        assert word.term == "test"
-        assert word.meaning == "a procedure intended to establish the quality"
-        assert word.usage == "This is a test."
-        assert word.synonyms == ["examination", "trial", "experiment"]
-
-    def test_vocabulary_word_empty_synonyms(self):
-        """Test VocabularyWord accepts empty synonyms list."""
-        word = VocabularyWord(
-            term="unique",
-            meaning="being the only one of its kind",
-            usage="This is unique.",
-            synonyms=[],
-        )
-
-        assert word.synonyms == []
+        data = result.model_dump()
+        assert data == {"words": [{"word": "test", "content": "Test content"}]}
 
 
 class TestAnalyzeResponse:
@@ -293,12 +342,10 @@ class TestAnalyzeResponse:
     def test_analyze_response_with_all_results(self):
         """Test AnalyzeResponse aggregates all three tutor results."""
         session_id = "550e8400-e29b-41d4-a716-446655440000"
-        reading = ReadingResult(summary="Test", main_topic="Topic", emotional_tone="neutral")
-        grammar = GrammarResult(
-            tenses=["present"], voice="active", sentence_structure="simple", analysis="Good"
-        )
+        reading = ReadingResult(content="Reading Korean Markdown content")
+        grammar = GrammarResult(content="Grammar Korean Markdown content")
         vocabulary = VocabularyResult(
-            words=[VocabularyWord(term="test", meaning="test", usage="test", synonyms=["synonym"])]
+            words=[VocabularyWordEntry(word="test", content="Test etymology content")]
         )
 
         response = AnalyzeResponse(
@@ -306,14 +353,14 @@ class TestAnalyzeResponse:
         )
 
         assert response.session_id == session_id
-        assert response.reading.summary == "Test"
-        assert response.grammar.tenses == ["present"]
-        assert response.vocabulary.words[0].term == "test"
+        assert response.reading.content == "Reading Korean Markdown content"
+        assert response.grammar.content == "Grammar Korean Markdown content"
+        assert response.vocabulary.words[0].word == "test"
 
     def test_analyze_response_with_partial_results(self):
         """Test AnalyzeResponse accepts partial results (None values)."""
         session_id = "550e8400-e29b-41d4-a716-446655440000"
-        reading = ReadingResult(summary="Test", main_topic="Topic", emotional_tone="neutral")
+        reading = ReadingResult(content="Reading content")
 
         response = AnalyzeResponse(session_id=session_id, reading=reading)
 
@@ -336,11 +383,11 @@ class TestAnalyzeResponse:
     def test_analyze_response_serialization(self):
         """Test AnalyzeResponse can be serialized to JSON."""
         session_id = "550e8400-e29b-41d4-a716-446655440000"
-        reading = ReadingResult(summary="Test", main_topic="Topic", emotional_tone="neutral")
+        reading = ReadingResult(content="Reading content")
 
         response = AnalyzeResponse(session_id=session_id, reading=reading)
         data = response.model_dump()
 
         assert "session_id" in data
         assert "reading" in data
-        assert data["reading"]["summary"] == "Test"
+        assert data["reading"]["content"] == "Reading content"

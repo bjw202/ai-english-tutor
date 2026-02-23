@@ -85,7 +85,6 @@ class TestPyprojectToml:
             "pydantic-settings",
             "langgraph",
             "langchain-openai",
-            "langchain-anthropic",
             "python-multipart",
             "pillow",
         }
@@ -135,7 +134,6 @@ class TestEnvExample:
 
         required_vars = [
             "OPENAI_API_KEY",
-            "ANTHROPIC_API_KEY",
             "ENVIRONMENT",
             "LOG_LEVEL",
             "HOST",

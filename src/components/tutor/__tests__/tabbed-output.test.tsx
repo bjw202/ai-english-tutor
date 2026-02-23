@@ -5,23 +5,23 @@ import { TabbedOutput } from "../tabbed-output";
 
 describe("TabbedOutput", () => {
   const mockReading = {
-    summary: "Test summary",
-    keyPoints: ["Point 1"],
-    comprehensionLevel: 3,
+    content: "Test reading content.",
   };
 
   const mockGrammar = {
-    issues: [],
-    overallScore: 85,
-    suggestions: ["Good job!"],
+    content: "Grammar analysis here.",
   };
 
   const mockVocabulary = {
-    words: [],
-    difficultyLevel: 3,
+    words: [
+      {
+        word: "test",
+        content: "테스트 어원 설명.",
+      },
+    ],
   };
 
-  it("should render tabs correctly", () => {
+  it("should render Korean tab labels correctly", () => {
     render(
       <TabbedOutput
         reading={mockReading}
@@ -30,11 +30,9 @@ describe("TabbedOutput", () => {
       />,
     );
 
-    expect(screen.getByRole("tab", { name: "Reading" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Grammar" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("tab", { name: "Vocabulary" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "독해" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "문법" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "어휘" })).toBeInTheDocument();
   });
 
   it("should show reading panel by default", () => {
@@ -46,7 +44,7 @@ describe("TabbedOutput", () => {
       />,
     );
 
-    expect(screen.getByText("Test summary")).toBeInTheDocument();
+    expect(screen.getByText("독해 훈련")).toBeInTheDocument();
   });
 
   it("should switch to grammar tab when clicked", async () => {
@@ -60,42 +58,31 @@ describe("TabbedOutput", () => {
       />,
     );
 
-    const grammarTab = screen.getByRole("tab", { name: "Grammar" });
+    const grammarTab = screen.getByRole("tab", { name: "문법" });
     await user.click(grammarTab);
 
-    expect(screen.getByText("Good job!")).toBeInTheDocument();
+    expect(screen.getByText("문법 구조 이해")).toBeInTheDocument();
   });
 
   it("should switch to vocabulary tab when clicked", async () => {
     const user = userEvent.setup();
 
-    const mockVocabWithData = {
-      words: [
-        {
-          word: "test",
-          definition: "A test",
-          example: "Test example",
-          difficulty: "basic" as const,
-        },
-      ],
-      difficultyLevel: 1,
-    };
-
     render(
       <TabbedOutput
         reading={mockReading}
         grammar={mockGrammar}
-        vocabulary={mockVocabWithData}
+        vocabulary={mockVocabulary}
       />,
     );
 
-    const vocabTab = screen.getByRole("tab", { name: "Vocabulary" });
+    const vocabTab = screen.getByRole("tab", { name: "어휘" });
     await user.click(vocabTab);
 
-    expect(screen.getByText("test")).toBeInTheDocument();
+    expect(screen.getByText("어휘 어원 학습")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "test" })).toBeInTheDocument();
   });
 
-  it("should show message when all data is null", () => {
+  it("should show Korean message when all data is null", () => {
     render(
       <TabbedOutput
         reading={null}
@@ -104,10 +91,9 @@ describe("TabbedOutput", () => {
       />,
     );
 
-    // When all data is null, tabs are not rendered, only the message
-    expect(screen.queryByRole("tab", { name: "Reading" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "독해" })).not.toBeInTheDocument();
     expect(
-      screen.getByText("Submit text or upload an image to see analysis results"),
+      screen.getByText("텍스트를 입력하거나 이미지를 업로드하면 분석 결과가 여기에 표시됩니다"),
     ).toBeInTheDocument();
   });
 });

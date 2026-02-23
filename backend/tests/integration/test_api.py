@@ -64,7 +64,8 @@ class TestHealthEndpoint:
         assert "status" in data
         assert data["status"] == "healthy"
         assert "openai" in data
-        assert "anthropic" in data
+        # anthropic removed - only OpenAI used
+        assert "openai" in data
         assert "version" in data
 
 
@@ -76,26 +77,14 @@ class TestAnalyzeEndpoint:
         # Mock graph result
         from tutor.schemas import GrammarResult, ReadingResult, VocabularyResult
 
+        from tutor.schemas import VocabularyWordEntry
+
         mock_graph.ainvoke.return_value = {
             "messages": [],
-            "reading_result": ReadingResult(
-                summary="Test summary", main_topic="Test topic", emotional_tone="Neutral"
-            ),
-            "grammar_result": GrammarResult(
-                tenses=["past_simple"],
-                voice="active",
-                sentence_structure="simple",
-                analysis="Good grammar",
-            ),
+            "reading_result": ReadingResult(content="## 독해 훈련\n\nTest reading content."),
+            "grammar_result": GrammarResult(content="## 문법 구조 이해\n\nTest grammar analysis."),
             "vocabulary_result": VocabularyResult(
-                words=[
-                    {
-                        "term": "test",
-                        "meaning": "a trial",
-                        "usage": "This is a test",
-                        "synonyms": ["exam"],
-                    }
-                ]
+                words=[VocabularyWordEntry(word="test", content="**어원:** 테스트 어원 설명.")]
             ),
         }
 
@@ -175,9 +164,7 @@ class TestAnalyzeImageEndpoint:
 
         mock_graph.ainvoke.return_value = {
             "messages": [],
-            "reading_result": ReadingResult(
-                summary="Image text summary", main_topic="Image topic", emotional_tone="Neutral"
-            ),
+            "reading_result": ReadingResult(content="## 독해 훈련\n\nImage text content."),
             "extracted_text": "Text extracted from image",
         }
 
@@ -272,9 +259,7 @@ class TestChatEndpoint:
 
         mock_graph.ainvoke.return_value = {
             "messages": [],
-            "reading_result": ReadingResult(
-                summary="Chat response", main_topic="Topic", emotional_tone="Neutral"
-            ),
+            "reading_result": ReadingResult(content="## 독해 훈련\n\nChat response content."),
         }
 
         response = client.post(

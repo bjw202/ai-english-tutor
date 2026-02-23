@@ -1,8 +1,8 @@
 # AI English Tutor
 
-AI 기반 개인 맞춤형 영어 학습 튜터 - 풀스택 애플리케이션
+AI 기반 한국어 교육 중심 영어 학습 튜터 - 풀스택 애플리케이션
 
-중학생(13-15세)을 대상으로 고등학교 영어 선행학습을 지원합니다.
+중학생(13-15세)을 대상으로 한국 교육과정 기반 슬래시 읽기(직독직해), 구조 중심 문법, 어원 네트워크 어휘 학습을 제공합니다.
 
 ## 기술 스택
 
@@ -50,10 +50,13 @@ ai-english-tutor/
 ├── backend/                # FastAPI 백엔드
 │   ├── src/tutor/
 │   │   ├── agents/         # LangGraph 에이전트
-│   │   ├── models/         # LLM 모델
+│   │   ├── models/         # LLM 팩토리
+│   │   │   └── llm.py
 │   │   ├── routers/        # API 라우터
 │   │   ├── services/       # 비즈니스 로직
-│   │   └── prompts/        # 프롬프트 템플릿
+│   │   ├── prompts/        # 프롬프트 템플릿
+│   │   └── utils/          # 유틸리티
+│   │       └── markdown_normalizer.py  # LLM 출력 정규화
 │   └── tests/              # 백엔드 테스트
 ├── .moai/                  # MoAI-ADK 설정
 │   ├── specs/              # SPEC 문서
@@ -63,10 +66,12 @@ ai-english-tutor/
 
 ## 주요 기능
 
-- **텍스트 분석**: 영어 텍스트 입력 후 독해/문법/어휘 분석
-- **이미지 분석**: 교과서 이미지 업로드 후 OCR 기반 분석
-- **후속 질문**: 분석 결과에 대한 컨텍스트 기반 대화
-- **이해도 조절**: Level 1-5 슬라이더로 분석 깊이 조절
+- **Supervisor 사전 분석**: Claude Haiku를 통한 자동 문장 분리, 난이도 평가, 학습 포커스 추천
+- **슬래시 읽기 훈련**: 영어 구조를 시각화하는 슬래시 직독직해로 읽기 능력 개발
+- **구조 중심 문법**: 한국어 비교 분석을 포함한 영어 구조 이해 중심 설명
+- **어원 네트워크 어휘**: PIE 어근부터 현재 의미까지의 발전 과정을 통한 깊이 있는 어휘 학습
+- **이미지 분석**: 교과서 이미지 업로드 후 OCR 기반 한국어 교육 분석
+- **이해도 조절**: Level 1-5 슬라이더로 한국 교육학적 설명 깊이 조절
 - **실시간 스트리밍**: SSE(Server-Sent Events) 기반 실시간 응답
 
 ## 설치 및 실행
@@ -77,8 +82,7 @@ ai-english-tutor/
 - Python 3.13+
 - pnpm 10.x
 - uv 패키지 매니저
-- OpenAI API 키
-- Anthropic API 키
+- OpenAI API 키 (gpt-4o-mini)
 
 ### 프론트엔드 설정
 
@@ -110,9 +114,9 @@ cp .env.example .env
 `.env` 파일:
 ```env
 OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
 ENVIRONMENT=development
 LOG_LEVEL=DEBUG
+GLM_API_KEY=            # 선택: GLM (Zhipu AI) 사용 시에만 필요
 ```
 
 ### 개발 서버 실행
@@ -188,16 +192,18 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 
 ### 프론트엔드
 
-- **테스트**: 101개 통과
+- **테스트**: 97개 통과 (모바일 반응형 UI 포함)
 - **커버리지**: 91.98% (Lines), 86.5% (Branches)
 - **TypeScript**: strict mode, 0 에러
 - **ESLint**: 0 에러
+- **Markdown 렌더링**: ReactMarkdown을 통한 한국어 교육 콘텐츠 완벽 지원
 
 ### 백엔드
 
-- **테스트**: 34개 통과
-- **커버리지**: 96% (Lines)
+- **테스트**: 207개 통과
+- **커버리지**: 83% (Lines)
 - **Ruff**: 0 에러
+- **LLM 모델 통합**: 모든 에이전트 gpt-4o-mini 통일 (비용 95% 절감)
 
 ## 라이선스
 

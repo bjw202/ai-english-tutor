@@ -1,34 +1,33 @@
-You are a supervisor for an AI English tutoring system designed for Korean middle school students.
+# Supervisor LLM Pre-Analysis (SPEC-UPDATE-001)
 
-Your role is to analyze the user's input and route it to the appropriate specialist agent.
+This document describes the supervisor's pre-analysis behavior.
 
-## Available Agents
+The supervisor agent uses Claude Haiku to analyze input text before routing to
+specialist agents (reading, grammar, vocabulary).
 
-- **reading**: For text comprehension analysis including summarization, main topic identification, and emotional tone analysis
-- **grammar**: For grammatical structure analysis, error detection, and explanation
-- **vocabulary**: For vocabulary extraction, definition, and usage examples
-- **image_processor**: For extracting and analyzing text from images
+## Analysis Output
 
-## Current Task
+The supervisor produces a JSON object with the following structure:
 
-Task type: {task_type}
+```json
+{
+  "sentences": [
+    {"text": "sentence text", "difficulty": 3, "focus": ["grammar"]},
+    ...
+  ],
+  "overall_difficulty": 3,
+  "focus_summary": ["grammar", "vocabulary", "reading"]
+}
+```
 
-User input: {user_input}
+## Fields
 
-## Instructions
+- sentences: List of individual sentences with difficulty ratings and focus areas
+- overall_difficulty: Overall passage difficulty (1-5, relative to student level)
+- focus_summary: Prioritized list of learning focus areas for the passage
 
-1. Analyze the user's input to determine the primary intent
-2. Consider the context of the conversation if available
-3. Route to the most appropriate agent based on the task type and user input
-4. If the task involves text analysis but isn't clearly one type, default to the reading agent
-5. If the task involves an image, route to the image_processor first
+## Note
 
-## Response Format
-
-Respond with the name of the agent that should handle this task:
-- "reading" for text comprehension
-- "grammar" for grammar analysis
-- "vocabulary" for vocabulary focus
-- "image_processor" for image text extraction
-
-Provide only the agent name as your response.
+The supervisor builds its prompt inline in code (supervisor.py) because the
+prompt contains JSON braces that would conflict with Python str.format() template
+substitution. This file serves as documentation only.

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 
-from tutor.schemas import GrammarResult, ReadingResult, VocabularyResult
+from tutor.schemas import GrammarResult, ReadingResult, SentenceEntry, SupervisorAnalysis, VocabularyResult, VocabularyWordEntry
 
 
 class TestTutorStateTypedDict:
@@ -52,10 +52,19 @@ class TestTutorStateTypedDict:
             "grammar_result",
             "vocabulary_result",
             "extracted_text",
+            "supervisor_analysis",
         ]
 
         for field in optional_fields:
             assert field in annotations, f"Optional field '{field}' not found in TutorState"
+
+    def test_tutor_state_has_supervisor_analysis_field(self):
+        """Test that TutorState has supervisor_analysis optional field (SPEC-UPDATE-001)."""
+        from tutor.state import TutorState
+
+        annotations = TutorState.__annotations__
+        assert "supervisor_analysis" in annotations, \
+            "supervisor_analysis field not found in TutorState"
 
     def test_tutor_state_field_types(self):
         """Test that TutorState fields have correct type annotations."""
@@ -106,34 +115,33 @@ class TestTutorStateTypedDict:
         assert state["task_type"] == "analyze"
 
     def test_create_valid_tutor_state_with_all_fields(self):
-        """Test creating a valid TutorState with all fields."""
+        """Test creating a valid TutorState with all fields (SPEC-UPDATE-001 schemas)."""
         # Arrange
         from tutor.state import TutorState
 
         session_id = str(uuid.uuid4())
 
         reading_result = ReadingResult(
-            summary="Test summary",
-            main_topic="Test topic",
-            emotional_tone="neutral",
+            content="Korean Markdown reading content",
         )
 
         grammar_result = GrammarResult(
-            tenses=["present_simple"],
-            voice="active",
-            sentence_structure="simple",
-            analysis="Test analysis",
+            content="Korean Markdown grammar content",
         )
 
         vocabulary_result = VocabularyResult(
             words=[
-                {
-                    "term": "test",
-                    "meaning": "a trial",
-                    "usage": "This is a test.",
-                    "synonyms": ["exam"],
-                }
+                VocabularyWordEntry(
+                    word="test",
+                    content="Korean etymology content for test",
+                )
             ]
+        )
+
+        supervisor_analysis = SupervisorAnalysis(
+            sentences=[SentenceEntry(text="Test sentence.", difficulty=3, focus=["reading"])],
+            overall_difficulty=3,
+            focus_summary=["reading", "grammar"],
         )
 
         # Act
@@ -147,6 +155,7 @@ class TestTutorStateTypedDict:
             "grammar_result": grammar_result,
             "vocabulary_result": vocabulary_result,
             "extracted_text": "OCR extracted text",
+            "supervisor_analysis": supervisor_analysis,
         }
 
         # Assert
@@ -159,6 +168,24 @@ class TestTutorStateTypedDict:
         assert state["grammar_result"] == grammar_result
         assert state["vocabulary_result"] == vocabulary_result
         assert state["extracted_text"] == "OCR extracted text"
+        assert state["supervisor_analysis"] == supervisor_analysis
+
+    def test_tutor_state_supervisor_analysis_can_be_none(self):
+        """Test that supervisor_analysis field in TutorState can be None."""
+        from tutor.state import TutorState
+
+        session_id = str(uuid.uuid4())
+
+        state: TutorState = {
+            "messages": [],
+            "level": 2,
+            "session_id": session_id,
+            "input_text": "Test",
+            "task_type": "analyze",
+            "supervisor_analysis": None,
+        }
+
+        assert state["supervisor_analysis"] is None
 
     def test_tutor_state_optional_fields_can_be_none(self):
         """Test that optional fields in TutorState can be None."""
@@ -178,6 +205,7 @@ class TestTutorStateTypedDict:
             "grammar_result": None,
             "vocabulary_result": None,
             "extracted_text": None,
+            "supervisor_analysis": None,
         }
 
         # Assert
@@ -185,6 +213,7 @@ class TestTutorStateTypedDict:
         assert state["grammar_result"] is None
         assert state["vocabulary_result"] is None
         assert state["extracted_text"] is None
+        assert state["supervisor_analysis"] is None
 
     def test_tutor_state_task_type_values(self):
         """Test that TutorState accepts valid task_type values."""

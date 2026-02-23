@@ -7,58 +7,39 @@ describe("VocabularyPanel", () => {
     words: [
       {
         word: "ephemeral",
-        definition: "Lasting for a very short time.",
-        example: "The ephemeral beauty of cherry blossoms.",
-        difficulty: "advanced" as const,
+        content: "**어원:** 그리스어 *ephemeros*에서 유래.",
       },
       {
         word: "abundant",
-        definition: "Existing in large quantities; plentiful.",
-        example: "The forest has abundant wildlife.",
-        difficulty: "intermediate" as const,
-      },
-      {
-        word: "happy",
-        definition: "Feeling pleasure.",
-        example: "I am happy today.",
-        difficulty: "basic" as const,
+        content: "**어원:** 라틴어 *abundans*에서 유래.",
       },
     ],
-    difficultyLevel: 3,
   };
 
   it("should render vocabulary data correctly", () => {
     render(<VocabularyPanel result={mockData} />);
 
-    expect(screen.getByText("Vocabulary Analysis")).toBeInTheDocument();
-    expect(screen.getByText("ephemeral")).toBeInTheDocument();
-    expect(screen.getByText("abundant")).toBeInTheDocument();
-    expect(screen.getByText("happy")).toBeInTheDocument();
+    expect(screen.getByText("어휘 어원 학습")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "ephemeral" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "abundant" })).toBeInTheDocument();
   });
 
-  it("should render definitions and examples", () => {
+  it("should render etymology content for each word", () => {
     render(<VocabularyPanel result={mockData} />);
 
-    expect(
-      screen.getByText("Lasting for a very short time."),
-    ).toBeInTheDocument();
-    // The example is wrapped in quotes in the component
-    expect(
-      screen.getByText(/The ephemeral beauty of cherry blossoms/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/ephemeros/)).toBeInTheDocument();
+    expect(screen.getByText(/abundans/)).toBeInTheDocument();
   });
 
-  it("should display difficulty badges", () => {
-    render(<VocabularyPanel result={mockData} />);
-
-    expect(screen.getByText("advanced")).toBeInTheDocument();
-    expect(screen.getByText("intermediate")).toBeInTheDocument();
-    expect(screen.getByText("basic")).toBeInTheDocument();
-  });
-
-  it("should show placeholder when result is null", () => {
+  it("should show Korean empty state when result is null", () => {
     render(<VocabularyPanel result={null} />);
 
-    expect(screen.getByText("No vocabulary analysis yet")).toBeInTheDocument();
+    expect(screen.getByText("아직 어휘 분석이 없습니다")).toBeInTheDocument();
+  });
+
+  it("should show Korean empty state when words array is empty", () => {
+    render(<VocabularyPanel result={{ words: [] }} />);
+
+    expect(screen.getByText("아직 어휘 분석이 없습니다")).toBeInTheDocument();
   });
 });

@@ -2,83 +2,41 @@ import { describe, it, expect } from "vitest";
 import type {
   ReadingResult,
   GrammarResult,
-  GrammarIssue,
+  VocabularyWordEntry,
   VocabularyResult,
-  VocabularyWord,
   AnalyzeResponse,
 } from "../tutor";
 
 describe("Tutor Types", () => {
-  describe("GrammarIssue", () => {
-    it("should have correct structure", () => {
-      const issue: GrammarIssue = {
-        issue: "Subject-verb agreement",
-        type: "grammar",
-        suggestion: "Use 'changes' instead of 'change'",
-        position: { start: 10, end: 20 },
-      };
-
-      expect(issue.issue).toBeTypeOf("string");
-      expect(issue.type).toBeTypeOf("string");
-      expect(issue.suggestion).toBeTypeOf("string");
-      expect(issue.position?.start).toBeTypeOf("number");
-      expect(issue.position?.end).toBeTypeOf("number");
-    });
-  });
-
   describe("ReadingResult", () => {
     it("should have correct structure", () => {
       const result: ReadingResult = {
-        summary: "The text discusses climate change",
-        keyPoints: [
-          "Global temperatures are rising",
-          "Human activities contribute to greenhouse gases",
-        ],
-        comprehensionLevel: 3,
+        content: "## 독해 훈련\n\nThe text discusses climate change and its effects.",
       };
 
-      expect(result.summary).toBeTypeOf("string");
-      expect(Array.isArray(result.keyPoints)).toBe(true);
-      expect(result.comprehensionLevel).toBeGreaterThanOrEqual(1);
-      expect(result.comprehensionLevel).toBeLessThanOrEqual(5);
+      expect(result.content).toBeTypeOf("string");
     });
   });
 
   describe("GrammarResult", () => {
     it("should have correct structure", () => {
       const result: GrammarResult = {
-        issues: [
-          {
-            issue: "Run-on sentence",
-            type: "punctuation",
-            suggestion: "Break into two sentences",
-            position: { start: 0, end: 50 },
-          },
-        ],
-        overallScore: 85,
-        suggestions: ["Use shorter sentences for clarity"],
+        content: "## 문법 구조 이해\n\n문장 구조 분석 내용입니다.",
       };
 
-      expect(Array.isArray(result.issues)).toBe(true);
-      expect(result.overallScore).toBeGreaterThanOrEqual(0);
-      expect(result.overallScore).toBeLessThanOrEqual(100);
-      expect(Array.isArray(result.suggestions)).toBe(true);
+      expect(result.content).toBeTypeOf("string");
     });
   });
 
-  describe("VocabularyWord", () => {
+  describe("VocabularyWordEntry", () => {
     it("should have correct structure", () => {
-      const word: VocabularyWord = {
+      const entry: VocabularyWordEntry = {
         word: "ephemeral",
-        definition: "lasting for a very short time",
-        example: "The ephemeral beauty of cherry blossoms",
-        difficulty: "advanced",
+        content: "## ephemeral\n\n어원: 라틴어 *ephemerus*에서 유래...",
       };
 
-      expect(word.word).toBeTypeOf("string");
-      expect(word.definition).toBeTypeOf("string");
-      expect(word.example).toBeTypeOf("string");
-      expect(["basic", "intermediate", "advanced"]).toContain(word.difficulty);
+      expect(entry.word).toBeTypeOf("string");
+      expect(entry.content).toBeTypeOf("string");
     });
   });
 
@@ -88,17 +46,14 @@ describe("Tutor Types", () => {
         words: [
           {
             word: "climate",
-            definition: "weather conditions",
-            example: "The climate is changing",
-            difficulty: "basic",
+            content: "## climate\n\n어원 분석...",
           },
         ],
-        difficultyLevel: 3,
       };
 
       expect(Array.isArray(result.words)).toBe(true);
-      expect(result.difficultyLevel).toBeGreaterThanOrEqual(1);
-      expect(result.difficultyLevel).toBeLessThanOrEqual(5);
+      expect(result.words[0].word).toBeTypeOf("string");
+      expect(result.words[0].content).toBeTypeOf("string");
     });
   });
 
@@ -106,27 +61,35 @@ describe("Tutor Types", () => {
     it("should combine all results", () => {
       const response: AnalyzeResponse = {
         reading: {
-          summary: "Test summary",
-          keyPoints: ["Point 1"],
-          comprehensionLevel: 3,
+          content: "독해 훈련 내용",
         },
         grammar: {
-          issues: [],
-          overallScore: 90,
-          suggestions: [],
+          content: "문법 구조 이해 내용",
         },
         vocabulary: {
           words: [],
-          difficultyLevel: 3,
         },
-        sessionId: "550e8400-e29b-41d4-a716-446655440000", // Valid UUID format
+        sessionId: "550e8400-e29b-41d4-a716-446655440000",
       };
 
       expect(response.reading).toBeDefined();
       expect(response.grammar).toBeDefined();
       expect(response.vocabulary).toBeDefined();
       expect(response.sessionId).toBeTypeOf("string");
-      expect(response.sessionId).toMatch(/^[a-f0-9-]+$/); // UUID format
+      expect(response.sessionId).toMatch(/^[a-f0-9-]+$/);
+    });
+
+    it("should allow null for reading, grammar, and vocabulary", () => {
+      const response: AnalyzeResponse = {
+        reading: null,
+        grammar: null,
+        vocabulary: null,
+        sessionId: "550e8400-e29b-41d4-a716-446655440000",
+      };
+
+      expect(response.reading).toBeNull();
+      expect(response.grammar).toBeNull();
+      expect(response.vocabulary).toBeNull();
     });
   });
 });

@@ -4,6 +4,8 @@ Pydantic schemas for request and response validation.
 Defines all data models for the AI English Tutor API.
 """
 
+from __future__ import annotations
+
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -36,41 +38,51 @@ class ChatRequest(BaseModel):
     level: int = Field(..., ge=1, le=5, description="English proficiency level (1-5)")
 
 
-# Result Schemas
+# Supervisor Analysis Schemas (SPEC-UPDATE-001)
+
+
+class SentenceEntry(BaseModel):
+    """Individual sentence entry from supervisor pre-analysis."""
+
+    text: str = Field(..., description="Sentence text")
+    difficulty: int = Field(..., ge=1, le=5, description="Difficulty level 1-5")
+    focus: list[str] = Field(default_factory=list, description="Learning focus areas")
+
+
+class SupervisorAnalysis(BaseModel):
+    """Supervisor LLM pre-analysis result."""
+
+    sentences: list[SentenceEntry] = Field(default_factory=list)
+    overall_difficulty: int = Field(default=3, ge=1, le=5)
+    focus_summary: list[str] = Field(default_factory=list)
+
+
+# Result Schemas (SPEC-UPDATE-001 - content-based Markdown output)
+
+
+class VocabularyWordEntry(BaseModel):
+    """Individual vocabulary word with Korean etymology explanation."""
+
+    word: str = Field(..., description="The vocabulary word")
+    content: str = Field(..., description="Korean Markdown explanation (6-step etymology)")
 
 
 class ReadingResult(BaseModel):
-    """Result model for reading comprehension analysis."""
+    """Reading training result - Korean Markdown content."""
 
-    summary: str = Field(..., description="Summary of the text")
-    main_topic: str = Field(..., description="Main topic of the text")
-    emotional_tone: str = Field(..., description="Emotional tone detected in the text")
+    content: str = Field(..., description="Korean Markdown with slash reading training")
 
 
 class GrammarResult(BaseModel):
-    """Result model for grammar analysis."""
+    """Grammar analysis result - Korean Markdown content."""
 
-    tenses: list[str] = Field(default_factory=list, description="List of tenses used in the text")
-    voice: str = Field(..., description="Voice used (active/passive)")
-    sentence_structure: str = Field(..., description="Sentence structure type")
-    analysis: str = Field(..., description="Detailed grammar analysis")
-
-
-class VocabularyWord(BaseModel):
-    """Single vocabulary word entry."""
-
-    term: str = Field(..., description="The vocabulary word")
-    meaning: str = Field(..., description="Definition of the word")
-    usage: str = Field(..., description="Example usage sentence")
-    synonyms: list[str] = Field(default_factory=list, description="List of synonyms")
+    content: str = Field(..., description="Korean Markdown with grammar structure understanding")
 
 
 class VocabularyResult(BaseModel):
-    """Result model for vocabulary analysis."""
+    """Vocabulary etymology result."""
 
-    words: list[VocabularyWord] = Field(
-        default_factory=list, description="List of vocabulary words"
-    )
+    words: list[VocabularyWordEntry] = Field(default_factory=list)
 
 
 # Response Schema

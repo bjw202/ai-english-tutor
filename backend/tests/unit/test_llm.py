@@ -1,154 +1,123 @@
 """Unit tests for LLM client factory.
 
 Tests the get_llm() factory function that returns appropriate LangChain LLM clients
-based on model name prefix.
+based on model name prefix. Claude models raise ValueError; GLM models use
+Zhipu AI endpoint via ChatOpenAI.
 """
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-from langchain_anthropic import ChatAnthropic
-from langchain_openai import ChatOpenAI
 from langchain_core.language_models import BaseChatModel
+from langchain_openai import ChatOpenAI
 
 from tutor.models.llm import get_llm
+
+
+def _make_mock_settings(openai_key: str = "test-key", glm_key: str | None = None) -> MagicMock:
+    """Create a mock settings object for LLM tests."""
+    mock = MagicMock()
+    mock.OPENAI_API_KEY = openai_key
+    mock.GLM_API_KEY = glm_key
+    return mock
 
 
 class TestGetLLM:
     """Test suite for get_llm factory function."""
 
-    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key", "ANTHROPIC_API_KEY": "test-key"})
     def test_returns_chatopenai_for_gpt_models(self) -> None:
         """Test that get_llm returns ChatOpenAI instance for gpt-* models."""
-        # Arrange
-        model_name = "gpt-4o-mini"
+        mock_settings = _make_mock_settings()
+        with patch("tutor.models.llm.get_settings", return_value=mock_settings):
+            result = get_llm("gpt-4o-mini")
 
-        # Act
-        result = get_llm(model_name)
-
-        # Assert
         assert isinstance(result, ChatOpenAI)
-        assert result.model_name == model_name
+        assert result.model_name == "gpt-4o-mini"
 
-    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key", "ANTHROPIC_API_KEY": "test-key"})
     def test_returns_chatopenai_for_gpt_4o(self) -> None:
         """Test that get_llm returns ChatOpenAI for gpt-4o model."""
-        # Arrange
-        model_name = "gpt-4o"
+        mock_settings = _make_mock_settings()
+        with patch("tutor.models.llm.get_settings", return_value=mock_settings):
+            result = get_llm("gpt-4o")
 
-        # Act
-        result = get_llm(model_name)
-
-        # Assert
         assert isinstance(result, ChatOpenAI)
-        assert result.model_name == model_name
+        assert result.model_name == "gpt-4o"
 
-    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key", "ANTHROPIC_API_KEY": "test-key"})
-    def test_returns_chatanthropic_for_claude_models(self) -> None:
-        """Test that get_llm returns ChatAnthropic instance for claude-* models."""
-        # Arrange
-        model_name = "claude-sonnet-4-5"
+    def test_raises_valueerror_for_claude_models(self) -> None:
+        """Test that get_llm raises ValueError for claude-* models (R3)."""
+        with pytest.raises(ValueError, match="Claude models are not supported"):
+            get_llm("claude-sonnet-4-5")
 
-        # Act
-        result = get_llm(model_name)
-
-        # Assert
-        assert isinstance(result, ChatAnthropic)
-        assert result.model == model_name
-
-    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key", "ANTHROPIC_API_KEY": "test-key"})
-    def test_returns_chatanthropic_for_claude_haiku(self) -> None:
-        """Test that get_llm returns ChatAnthropic for claude-haiku-4-5 model."""
-        # Arrange
-        model_name = "claude-haiku-4-5"
-
-        # Act
-        result = get_llm(model_name)
-
-        # Assert
-        assert isinstance(result, ChatAnthropic)
-        assert result.model == model_name
+    def test_raises_valueerror_for_claude_haiku(self) -> None:
+        """Test that get_llm raises ValueError for claude-haiku models (R3)."""
+        with pytest.raises(ValueError, match="Claude models are not supported"):
+            get_llm("claude-haiku-4-5")
 
     def test_raises_valueerror_for_unknown_models(self) -> None:
         """Test that get_llm raises ValueError for unknown model prefixes."""
-        # Arrange
-        model_name = "unknown-model-x"
-
-        # Act & Assert
-        with pytest.raises(ValueError, match=f"Unknown model: {model_name}"):
-            get_llm(model_name)
+        with pytest.raises(ValueError, match="Unknown model"):
+            get_llm("unknown-model-x")
 
     def test_raises_valueerror_for_empty_string(self) -> None:
         """Test that get_llm raises ValueError for empty model name."""
-        # Arrange
-        model_name = ""
+        with pytest.raises(ValueError):
+            get_llm("")
 
-        # Act & Assert
-        with pytest.raises(ValueError, match="Unknown model:"):
-            get_llm(model_name)
-
-    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key", "ANTHROPIC_API_KEY": "test-key"})
     def test_returns_base_chat_model_interface(self) -> None:
         """Test that returned client implements BaseChatModel interface."""
-        # Arrange
-        model_name = "gpt-4o-mini"
+        mock_settings = _make_mock_settings()
+        with patch("tutor.models.llm.get_settings", return_value=mock_settings):
+            result = get_llm("gpt-4o-mini")
 
-        # Act
-        result = get_llm(model_name)
-
-        # Assert
         assert isinstance(result, BaseChatModel)
 
-    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key", "ANTHROPIC_API_KEY": "test-key"})
     def test_chatopenai_has_configured_timeout(self) -> None:
-        """Test that ChatOpenAI client is configured with timeout."""
-        # Arrange
-        model_name = "gpt-4o-mini"
+        """Test that ChatOpenAI client is configured with 120s timeout."""
+        mock_settings = _make_mock_settings()
+        with patch("tutor.models.llm.get_settings", return_value=mock_settings):
+            result = get_llm("gpt-4o-mini")
 
-        # Act
-        result = get_llm(model_name)
-
-        # Assert
         assert isinstance(result, ChatOpenAI)
-        assert result.request_timeout == 60
+        assert result.request_timeout == 120
 
-    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key", "ANTHROPIC_API_KEY": "test-key"})
-    def test_chatanthropic_has_configured_timeout(self) -> None:
-        """Test that ChatAnthropic client is configured with timeout."""
-        # Arrange
-        model_name = "claude-sonnet-4-5"
-
-        # Act
-        result = get_llm(model_name)
-
-        # Assert
-        assert isinstance(result, ChatAnthropic)
-        assert result.default_request_timeout == 60
-
-    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key", "ANTHROPIC_API_KEY": "test-key"})
     def test_chatopenai_has_max_retries_configured(self) -> None:
-        """Test that ChatOpenAI client is configured with max_retries."""
-        # Arrange
-        model_name = "gpt-4o-mini"
+        """Test that ChatOpenAI client is configured with max_retries=2."""
+        mock_settings = _make_mock_settings()
+        with patch("tutor.models.llm.get_settings", return_value=mock_settings):
+            result = get_llm("gpt-4o-mini")
 
-        # Act
-        result = get_llm(model_name)
-
-        # Assert
         assert isinstance(result, ChatOpenAI)
         assert result.max_retries == 2
 
-    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key", "ANTHROPIC_API_KEY": "test-key"})
-    def test_chatanthropic_has_max_retries_configured(self) -> None:
-        """Test that ChatAnthropic client is configured with max_retries."""
-        # Arrange
-        model_name = "claude-sonnet-4-5"
+    def test_glm_returns_chatmodel(self) -> None:
+        """Test that GLM models return ChatOpenAI instance (R4)."""
+        mock_settings = _make_mock_settings(glm_key="test-glm-key")
+        with patch("tutor.models.llm.get_settings", return_value=mock_settings):
+            result = get_llm("glm-4v-flash")
 
-        # Act
-        result = get_llm(model_name)
+        assert isinstance(result, ChatOpenAI)
 
-        # Assert
-        assert isinstance(result, ChatAnthropic)
-        assert result.max_retries == 2
+    def test_glm_uses_zhipu_endpoint(self) -> None:
+        """Test that GLM models use Zhipu AI endpoint (R4)."""
+        mock_settings = _make_mock_settings(glm_key="test-glm-key")
+        with patch("tutor.models.llm.get_settings", return_value=mock_settings):
+            result = get_llm("glm-4v")
+
+        assert "bigmodel.cn" in str(result.openai_api_base)
+
+    def test_glm_raises_without_api_key(self) -> None:
+        """Test that GLM models raise ValueError when GLM_API_KEY is missing (R5)."""
+        mock_settings = _make_mock_settings(glm_key=None)
+        with patch("tutor.models.llm.get_settings", return_value=mock_settings):
+            with pytest.raises(ValueError, match="GLM_API_KEY"):
+                get_llm("glm-4v-flash")
+
+    def test_glm_model_name_preserved(self) -> None:
+        """Test that GLM model name is preserved in the ChatOpenAI instance."""
+        mock_settings = _make_mock_settings(glm_key="test-glm-key")
+        with patch("tutor.models.llm.get_settings", return_value=mock_settings):
+            result = get_llm("glm-4v-flash")
+
+        assert result.model_name == "glm-4v-flash"

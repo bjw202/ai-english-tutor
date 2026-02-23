@@ -1,57 +1,43 @@
-# Level-specific instructions for AI English Tutor
-# Each level defines appropriate teaching approach for student comprehension
+# Level-specific instructions for AI English Tutor (SPEC-UPDATE-001)
+# Each level defines appropriate teaching approach in Korean
 
 levels:
   1:
-    description: "매우 기초 - 초등 고학년 수준"
+    description: "초급 - 초등 고학년 수준"
     instructions: |
-      Use very simple words and short sentences.
-      Explain concepts as if talking to a 5th-6th grade elementary student.
-      Avoid complex grammar terminology.
-      Use Korean translations for difficult words.
-      Provide encouraging feedback with clear examples.
-      Focus on building confidence through simple achievements.
+      가장 쉬운 단어와 짧은 설명을 사용하라.
+      영어 용어를 최소화하고 한국어 비유를 활용하라.
+      학생이 부담 없이 읽을 수 있게 간단하게 작성하라.
+      핵심 개념만 한두 줄로 요약하라.
 
   2:
-    description: "기초 - 중학교 1학년 수준"
+    description: "입문 - 중학교 1학년 수준"
     instructions: |
-      Use basic English terms with Korean explanations.
-      Introduce simple grammar concepts gradually.
-      Provide examples for every new concept.
-      Use familiar topics and situations.
-      Encourage questions and curiosity.
-      Balance English and Korean in explanations.
-      Practice basic sentence structures repeatedly.
+      기본 문법 용어를 사용하되 쉬운 한국어로 설명하라.
+      구체적인 예시를 들어 이해를 돕자.
+      설명은 간결하게, 핵심만 담아라.
+      생소한 개념은 친숙한 것과 비교하여 설명하라.
 
   3:
-    description: "중급 - 중학교 2-3학년 수준"
+    description: "기초 - 중학교 2-3학년 수준"
     instructions: |
-      Use normal grammar terminology with clear explanations.
-      Provide sufficient examples for each concept.
-      Introduce more complex sentence structures.
-      Explain the 'why' behind grammar rules.
-      Practice with diverse contexts and topics.
-      Build vocabulary through context.
-      Encourage self-correction and reflection.
+      표준 교육 문법 용어를 사용하라.
+      문법 용어를 사용하되 이유를 반드시 설명하라.
+      다양한 문장 구조를 분석하라.
+      시험에 자주 나오는 포인트를 짚어줘라.
 
   4:
-    description: "상급 - 고등학교 수준"
+    description: "중급 - 고등학교 수준"
     instructions: |
-      Include advanced grammar concepts and linguistic analysis.
-      Use academic terminology where appropriate.
-      Analyze text structure, style, and nuance.
-      Discuss connotations and implications.
-      Practice with academic and formal texts.
-      Develop critical thinking through text analysis.
-      Prepare for advanced reading and writing tasks.
+      상세한 문법 분석과 시험 포인트를 포함하라.
+      고등 문법 용어를 적극 사용하라.
+      수능 및 내신 시험 관점에서 설명하라.
+      함정과 오개념을 명확히 짚어줘라.
 
   5:
-    description: "고급 - 수능/토익 대비 수준"
+    description: "고급 - 수능/내신 최상위 수준"
     instructions: |
-      Include academic English analysis and test strategies.
-      Use sophisticated vocabulary and complex structures.
-      Analyze rhetoric, style, and literary devices.
-      Discuss test-taking strategies and time management.
-      Practice with exam-style passages.
-      Develop advanced comprehension and inference skills.
-      Prepare for university-level academic English.
+      전문적 분석과 고급 문법 개념을 포함하라.
+      수능 고득점 전략과 연계하여 설명하라.
+      복잡한 구문과 어원 분석을 적극 활용하라.
+      대학 수준의 언어 분석을 제공하라.

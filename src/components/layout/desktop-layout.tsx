@@ -72,14 +72,14 @@ export function DesktopLayout({
                 {/* Streaming indicator */}
                 {streamState.isStreaming && (
                   <div className="p-4 bg-primary/10 rounded-lg text-sm text-primary">
-                    Analyzing... Please wait...
+                    분석 중... 잠시 기다려주세요
                   </div>
                 )}
 
                 {/* Error display */}
                 {streamState.error && (
                   <div className="p-4 bg-destructive/10 rounded-lg text-sm text-destructive">
-                    Error: {streamState.error.message}
+                    오류: {streamState.error.message}
                   </div>
                 )}
               </div>
@@ -89,24 +89,19 @@ export function DesktopLayout({
                 <TabbedOutput
                   reading={
                     streamState.readingContent
-                      ? {
-                          summary: streamState.readingContent,
-                          keyPoints: [],
-                          comprehensionLevel: level,
-                        }
+                      ? { content: streamState.readingContent }
                       : null
                   }
                   grammar={
                     streamState.grammarContent
-                      ? {
-                          issues: [],
-                          overallScore: 85,
-                          suggestions: [streamState.grammarContent],
-                        }
+                      ? { content: streamState.grammarContent }
                       : null
                   }
-                  vocabulary={null}
-                  vocabularyRawContent={streamState.vocabularyContent}
+                  vocabulary={
+                    streamState.vocabularyWords && streamState.vocabularyWords.length > 0
+                      ? { words: streamState.vocabularyWords }
+                      : null
+                  }
                 />
               </div>
             </div>

@@ -1,58 +1,38 @@
 /**
- * Grammar issue type for individual grammar problems detected
- */
-export interface GrammarIssue {
-  issue: string;
-  type: string;
-  suggestion: string;
-  position?: {
-    start: number;
-    end: number;
-  };
-}
-
-/**
- * Reading comprehension analysis result
+ * Reading training result - Korean Markdown content
  */
 export interface ReadingResult {
-  summary: string;
-  keyPoints: string[];
-  comprehensionLevel: number; // 1-5
+  content: string;
 }
 
 /**
- * Grammar analysis result
+ * Grammar analysis result - Korean Markdown content
  */
 export interface GrammarResult {
-  issues: GrammarIssue[];
-  overallScore: number; // 0-100
-  suggestions: string[];
+  content: string;
 }
 
 /**
- * Individual vocabulary word entry
+ * Individual vocabulary word with Korean etymology explanation
  */
-export interface VocabularyWord {
+export interface VocabularyWordEntry {
   word: string;
-  definition: string;
-  example: string;
-  difficulty: "basic" | "intermediate" | "advanced";
+  content: string;
 }
 
 /**
- * Vocabulary analysis result
+ * Vocabulary etymology result
  */
 export interface VocabularyResult {
-  words: VocabularyWord[];
-  difficultyLevel: number; // 1-5
+  words: VocabularyWordEntry[];
 }
 
 /**
  * Complete analysis response from the backend
  */
 export interface AnalyzeResponse {
-  reading: ReadingResult;
-  grammar: GrammarResult;
-  vocabulary: VocabularyResult;
-  sessionId: string; // UUID format
+  reading: ReadingResult | null;
+  grammar: GrammarResult | null;
+  vocabulary: VocabularyResult | null;
+  sessionId: string;
 }

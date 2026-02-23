@@ -21,16 +21,15 @@ describe("useTutorStream", () => {
 
     expect(result.current.state.readingContent).toBe("");
     expect(result.current.state.grammarContent).toBe("");
-    expect(result.current.state.vocabularyContent).toBe("");
+    expect(result.current.state.vocabularyWords).toEqual([]);
     expect(result.current.state.isStreaming).toBe(false);
     expect(result.current.state.error).toBeNull();
   });
 
-  it("should parse READING chunks and update reading content", async () => {
+  it("should parse reading_chunk events and update reading content", async () => {
     const chunks = [
-      "data: [READING] First sentence\n\n",
-      "data: [READING] Second sentence\n\n",
-      "data: [DONE]\n\n",
+      'event: reading_chunk\ndata: {"content": "## 독해 훈련\\n\\n첫 번째 문장"}\n\n',
+      'event: done\ndata: {}\n\n',
     ];
 
     const mockReader = {
@@ -59,14 +58,13 @@ describe("useTutorStream", () => {
       await result.current.startStream(() => fetch("/api/test"));
     });
 
-    expect(result.current.state.readingContent).toContain("First sentence");
-    expect(result.current.state.readingContent).toContain("Second sentence");
+    expect(result.current.state.readingContent).toContain("독해 훈련");
   });
 
-  it("should parse GRAMMAR chunks and update grammar content", async () => {
+  it("should parse grammar_chunk events and update grammar content", async () => {
     const chunks = [
-      "data: [GRAMMAR] Grammar issue found\n\n",
-      "data: [DONE]\n\n",
+      'event: grammar_chunk\ndata: {"content": "## 문법 구조\\n\\n분석 내용"}\n\n',
+      'event: done\ndata: {}\n\n',
     ];
 
     const mockReader = {
@@ -95,13 +93,17 @@ describe("useTutorStream", () => {
       await result.current.startStream(() => fetch("/api/test"));
     });
 
-    expect(result.current.state.grammarContent).toContain("Grammar issue found");
+    expect(result.current.state.grammarContent).toContain("문법 구조");
   });
 
-  it("should parse VOCABULARY chunks and update vocabulary content", async () => {
+  it("should parse vocabulary_chunk events and update vocabularyWords", async () => {
+    const words = [
+      { word: "ephemeral", content: "## ephemeral\n\n어원 설명" },
+      { word: "abundant", content: "## abundant\n\n어원 설명" },
+    ];
     const chunks = [
-      "data: [VOCABULARY] New word definition\n\n",
-      "data: [DONE]\n\n",
+      `event: vocabulary_chunk\ndata: ${JSON.stringify({ words })}\n\n`,
+      'event: done\ndata: {}\n\n',
     ];
 
     const mockReader = {
@@ -130,7 +132,9 @@ describe("useTutorStream", () => {
       await result.current.startStream(() => fetch("/api/test"));
     });
 
-    expect(result.current.state.vocabularyContent).toContain("New word definition");
+    expect(result.current.state.vocabularyWords).toHaveLength(2);
+    expect(result.current.state.vocabularyWords[0].word).toBe("ephemeral");
+    expect(result.current.state.vocabularyWords[1].word).toBe("abundant");
   });
 
   it("should handle stream errors", async () => {
@@ -152,8 +156,8 @@ describe("useTutorStream", () => {
 
   it("should reset state when reset is called", async () => {
     const chunks = [
-      "data: [READING] Content\n\n",
-      "data: [DONE]\n\n",
+      'event: reading_chunk\ndata: {"content": "독해 내용"}\n\n',
+      'event: done\ndata: {}\n\n',
     ];
 
     const mockReader = {
@@ -182,7 +186,7 @@ describe("useTutorStream", () => {
       await result.current.startStream(() => fetch("/api/test"));
     });
 
-    expect(result.current.state.readingContent).toBe("Content");
+    expect(result.current.state.readingContent).toBe("독해 내용");
 
     act(() => {
       result.current.reset();
@@ -190,7 +194,7 @@ describe("useTutorStream", () => {
 
     expect(result.current.state.readingContent).toBe("");
     expect(result.current.state.grammarContent).toBe("");
-    expect(result.current.state.vocabularyContent).toBe("");
+    expect(result.current.state.vocabularyWords).toEqual([]);
     expect(result.current.state.error).toBeNull();
   });
 });

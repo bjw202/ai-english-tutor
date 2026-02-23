@@ -1,130 +1,133 @@
 """
-Vocabulary extraction agent.
+Vocabulary etymology agent - Korean etymology network-based explanation.
 
-Uses Claude Haiku to extract vocabulary words from text including:
-- Word terms
-- Definitions
-- Usage examples
-- Synonyms
+Uses Claude Sonnet (upgraded from Haiku) to generate Korean Markdown
+vocabulary content with 6-step etymology explanation for each word.
 """
 
 from __future__ import annotations
 
-import json
 import logging
+import re
 
+from tutor.config import get_settings
 from tutor.models.llm import get_llm
 from tutor.prompts import get_level_instructions, render_prompt
-from tutor.schemas import VocabularyResult, VocabularyWord
+from tutor.schemas import VocabularyResult, VocabularyWordEntry
 from tutor.state import TutorState
+from tutor.utils.markdown_normalizer import normalize_vocabulary_output
 
 logger = logging.getLogger(__name__)
 
 
-async def _parse_vocabulary_from_raw(content: str) -> VocabularyResult:
-    """Parse vocabulary result from raw LLM text response.
+def _parse_vocabulary_words(content: str) -> list[VocabularyWordEntry]:
+    """Parse vocabulary word entries from Markdown output.
 
-    Attempts to extract JSON from the response text and parse it into
-    a VocabularyResult. Returns an empty result if parsing fails.
+    The vocabulary prompt instructs the LLM to output sections like:
+        ## word1
+        ...content...
+        ---
+        ## word2
+        ...content...
+
+    Parses by splitting on '## ' headers to extract individual word entries.
 
     Args:
-        content: Raw text response from the LLM
+        content: Raw Markdown text from the LLM
 
     Returns:
-        VocabularyResult with parsed words, or empty result on failure
+        List of VocabularyWordEntry instances
     """
-    try:
-        # Try to find JSON object in the response
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start == -1 or end == 0:
-            logger.warning("No JSON object found in raw LLM response")
-            return VocabularyResult(words=[])
+    words = []
 
-        json_str = content[start:end]
-        data = json.loads(json_str)
+    # Split on markdown h2 headers (## word)
+    # Use regex to split on lines starting with ## followed by non-# character
+    parts = re.split(r"\n## ", content)
 
-        words_data = data.get("words", [])
-        words = []
-        for w in words_data:
-            if isinstance(w, dict) and "term" in w and "meaning" in w:
-                words.append(
-                    VocabularyWord(
-                        term=w.get("term", ""),
-                        meaning=w.get("meaning", ""),
-                        usage=w.get("usage", ""),
-                        synonyms=w.get("synonyms", []),
-                    )
-                )
+    for part in parts:
+        # Skip empty parts and the leading section before first ##
+        if not part.strip():
+            continue
 
-        logger.info(f"Fallback parser extracted {len(words)} words from raw response")
-        return VocabularyResult(words=words)
+        # Check if this looks like a word entry (not the footer/instructions section)
+        lines = part.strip().split("\n")
+        if not lines:
+            continue
 
-    except (json.JSONDecodeError, KeyError, TypeError) as e:
-        logger.warning(f"Failed to parse raw vocabulary response: {e}")
-        return VocabularyResult(words=[])
+        # First line is the word (or "## word" if it's the very first part)
+        word_line = lines[0].strip()
+
+        # Skip if it looks like an instruction section (e.g., "절대 금지")
+        if "금지" in word_line or "원칙" in word_line or "형식" in word_line:
+            continue
+
+        # Extract the word - remove any leading ## if present
+        word = word_line.lstrip("#").strip()
+
+        # Strip trailing section separators from content
+        word_content = part
+        # Remove the word from the content header if it starts with the word
+        if word_content.startswith(word_line):
+            word_content = word_content[len(word_line):].strip()
+
+        # Remove trailing --- separators
+        word_content = word_content.rstrip("-").strip()
+
+        if word and word_content:
+            words.append(VocabularyWordEntry(word=word, content=word_content))
+
+    logger.info(f"Parsed {len(words)} vocabulary words from Markdown output")
+    return words
 
 
 async def vocabulary_node(state: TutorState) -> dict:
     """
-    Process text for vocabulary extraction.
+    Process text for vocabulary etymology explanation.
 
-    Uses Claude Haiku (claude-haiku-4-5) to analyze the input text
-    and extract vocabulary words with definitions, usage examples, and synonyms.
+    Uses Claude Sonnet (claude-sonnet-4-5) to analyze the input text
+    and generate Korean Markdown vocabulary content with 6-step
+    etymology explanation for each selected word.
 
-    Attempts structured output first. If that fails, falls back to raw LLM
-    invocation with manual JSON parsing. Always returns a VocabularyResult
-    (never None) so the frontend receives the vocabulary_chunk SSE event.
+    Model upgraded from claude-haiku-4-5 to claude-sonnet-4-5 for better
+    Korean etymology quality.
 
     Args:
-        state: TutorState containing input_text and level
+        state: TutorState containing input_text, level, and supervisor_analysis
 
     Returns:
         Dictionary with "vocabulary_result" key containing VocabularyResult
     """
-    llm = get_llm("claude-haiku-4-5")
+    settings = get_settings()
+    llm = get_llm(settings.VOCABULARY_MODEL, max_tokens=6144)
 
     level = state.get("level", 3)
     input_text = state.get("input_text", "")
-
     level_instructions = get_level_instructions(level)
+
+    # Get supervisor analysis if available
+    supervisor_analysis = state.get("supervisor_analysis")
+    supervisor_context = ""
+    if supervisor_analysis:
+        supervisor_context = (
+            f"\n\n[사전 분석]\n"
+            f"전체 난이도: {supervisor_analysis.overall_difficulty}/5\n"
+            f"학습 포커스: {', '.join(supervisor_analysis.focus_summary)}"
+        )
 
     prompt = render_prompt(
         "vocabulary.md",
         text=input_text,
         level=level,
         level_instructions=level_instructions,
+        supervisor_context=supervisor_context,
     )
 
-    json_instruction = (
-        '\n\nIMPORTANT: You must respond with a valid JSON object containing a "words" array. '
-        'Each word in the array must have "term", "meaning", "usage", and "synonyms" fields.'
-    )
-    full_prompt = prompt + json_instruction
-
-    # Attempt 1: structured output
     try:
-        structured_llm = llm.with_structured_output(VocabularyResult)
-        vocabulary_result = await structured_llm.ainvoke(full_prompt)
-
-        if vocabulary_result is None:
-            logger.warning("Structured output returned None, falling back to raw invocation")
-            raise ValueError("Structured output returned None")
-
-        logger.info(f"Vocabulary result extracted (structured): {len(vocabulary_result.words)} words")
-        return {"vocabulary_result": vocabulary_result}
-
+        response = await llm.ainvoke(prompt)
+        content = response.content if hasattr(response, "content") else str(response)
+        content = normalize_vocabulary_output(content)
+        words = _parse_vocabulary_words(content)
+        return {"vocabulary_result": VocabularyResult(words=words)}
     except Exception as e:
-        logger.warning(f"Structured output failed, attempting raw fallback: {e}")
-
-    # Attempt 2: raw LLM invocation with manual JSON parsing
-    try:
-        raw_response = await llm.ainvoke(full_prompt)
-        content = raw_response.content if hasattr(raw_response, "content") else str(raw_response)
-        vocabulary_result = await _parse_vocabulary_from_raw(content)
-        logger.info(f"Vocabulary result extracted (raw fallback): {len(vocabulary_result.words)} words")
-        return {"vocabulary_result": vocabulary_result}
-
-    except Exception as e:
-        logger.error(f"Raw fallback also failed in vocabulary_node: {e}", exc_info=True)
+        logger.error(f"Error in vocabulary_node: {e}")
         return {"vocabulary_result": VocabularyResult(words=[])}

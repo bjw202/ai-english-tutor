@@ -9,8 +9,6 @@ interface TabbedOutputProps {
   reading: ReadingResult | null;
   grammar: GrammarResult | null;
   vocabulary: VocabularyResult | null;
-  /** Raw vocabulary content as fallback display */
-  vocabularyRawContent?: string;
   className?: string;
 }
 
@@ -21,17 +19,16 @@ export function TabbedOutput({
   reading,
   grammar,
   vocabulary,
-  vocabularyRawContent,
   className,
 }: TabbedOutputProps) {
   const [activeTab, setActiveTab] = useState("reading");
 
-  const hasContent = reading || grammar || vocabulary || (vocabularyRawContent && vocabularyRawContent.length > 0);
+  const hasContent = reading || grammar || vocabulary;
 
   if (!hasContent) {
     return (
       <div className="p-6 text-center text-muted-foreground h-full flex items-center justify-center">
-        Submit text or upload an image to see analysis results
+        텍스트를 입력하거나 이미지를 업로드하면 분석 결과가 여기에 표시됩니다
       </div>
     );
   }
@@ -40,9 +37,9 @@ export function TabbedOutput({
     <div className={`h-full ${className || ""}`}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
         <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
-          <TabsTrigger value="reading">Reading</TabsTrigger>
-          <TabsTrigger value="grammar">Grammar</TabsTrigger>
-          <TabsTrigger value="vocabulary">Vocabulary</TabsTrigger>
+          <TabsTrigger value="reading">독해</TabsTrigger>
+          <TabsTrigger value="grammar">문법</TabsTrigger>
+          <TabsTrigger value="vocabulary">어휘</TabsTrigger>
         </TabsList>
 
         <TabsContent value="reading" className="mt-4 flex-1 overflow-y-auto">
@@ -54,7 +51,7 @@ export function TabbedOutput({
         </TabsContent>
 
         <TabsContent value="vocabulary" className="mt-4 flex-1 overflow-y-auto">
-          <VocabularyPanel result={vocabulary} rawContent={vocabularyRawContent} />
+          <VocabularyPanel result={vocabulary} />
         </TabsContent>
       </Tabs>
     </div>

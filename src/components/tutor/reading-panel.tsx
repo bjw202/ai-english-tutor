@@ -9,8 +9,8 @@ interface ReadingPanelProps {
 }
 
 /**
- * Reading comprehension panel
- * Displays summary, key points, and comprehension level
+ * Reading training panel
+ * Displays Korean Markdown content for reading comprehension training
  */
 export function ReadingPanel({ result, className }: ReadingPanelProps) {
   if (!result) {
@@ -26,32 +26,11 @@ export function ReadingPanel({ result, className }: ReadingPanelProps) {
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="text-lg">Reading Comprehension</CardTitle>
+        <CardTitle className="text-lg">독해 훈련</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <h4 className="font-medium mb-2">Summary</h4>
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <ReactMarkdown>{result.summary}</ReactMarkdown>
-          </div>
-        </div>
-
-        <div>
-          <h4 className="font-medium mb-2">Key Points</h4>
-          <ul className="list-disc list-inside space-y-1">
-            {result.keyPoints.map((point, index) => (
-              <li key={index} className="text-sm text-muted-foreground">
-                {point}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Level:</span>
-          <span className="text-sm text-muted-foreground">
-            {result.comprehensionLevel}/5
-          </span>
+      <CardContent>
+        <div className="prose prose-sm dark:prose-invert max-w-none">
+          <ReactMarkdown>{result.content}</ReactMarkdown>
         </div>
       </CardContent>
     </Card>

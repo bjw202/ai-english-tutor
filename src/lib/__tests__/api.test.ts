@@ -62,18 +62,13 @@ describe("API Client", () => {
     it("should return response data on success", async () => {
       const mockData: AnalyzeResponse = {
         reading: {
-          summary: "Test summary",
-          keyPoints: ["Point 1"],
-          comprehensionLevel: 3,
+          content: "## 독해 훈련\n\nTest summary",
         },
         grammar: {
-          issues: [],
-          overallScore: 90,
-          suggestions: [],
+          content: "## 문법 구조 이해\n\nGrammar analysis",
         },
         vocabulary: {
           words: [],
-          difficultyLevel: 3,
         },
         sessionId: "test-session-id",
       };

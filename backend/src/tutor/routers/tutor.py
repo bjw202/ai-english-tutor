@@ -44,14 +44,12 @@ async def health() -> dict:
         {
             "status": "healthy",
             "openai": "connected",
-            "anthropic": "connected",
             "version": "0.1.0"
         }
     """
     return {
         "status": "healthy",
         "openai": "connected",  # In production, would actually check connectivity
-        "anthropic": "connected",
         "version": "0.1.0",
     }
 
@@ -84,7 +82,7 @@ async def analyze(request: AnalyzeRequest) -> StreamingResponse:
         }
     """
 
-    async def generate() -> AsyncGenerator[str, None]:
+    async def generate() -> AsyncGenerator[str]:
         """Generate SSE events from LangGraph execution."""
         try:
             # Create new session
@@ -161,7 +159,7 @@ async def analyze_image(request: AnalyzeImageRequest) -> StreamingResponse:
             detail=error_msg,
         )
 
-    async def generate() -> AsyncGenerator[str, None]:
+    async def generate() -> AsyncGenerator[str]:
         """Generate SSE events from image processing."""
         try:
             # Create new session
@@ -239,7 +237,7 @@ async def chat(request: ChatRequest) -> StreamingResponse:
     else:
         session_id = request.session_id
 
-    async def generate() -> AsyncGenerator[str, None]:
+    async def generate() -> AsyncGenerator[str]:
         """Generate SSE events from chat processing."""
         try:
             # Add user message to session
@@ -259,7 +257,7 @@ async def chat(request: ChatRequest) -> StreamingResponse:
             # Stream response (assuming aggregator formats output)
             # For now, yield a simple chat response
             if result.get("reading_result"):
-                response_content = result["reading_result"].summary
+                response_content = result["reading_result"].content
                 yield f"event: chat_chunk\ndata: {json.dumps({'content': response_content, 'role': 'assistant'})}\n\n"
 
             yield format_done_event(session_id)

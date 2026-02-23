@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef } from "react";
+import type { VocabularyWordEntry } from "@/types/tutor";
 
 export interface TutorStreamState {
   readingContent: string;
   grammarContent: string;
-  vocabularyContent: string;
+  vocabularyWords: VocabularyWordEntry[];
   isStreaming: boolean;
   error: Error | null;
 }
@@ -12,13 +13,22 @@ export interface TutorStreamState {
  * Hook to manage SSE streaming from the tutor API
  * Parses SSE events in format:
  *   event: reading_chunk
- *   data: {"summary": "...", ...}
+ *   data: {"content": "Korean Markdown string"}
+ *
+ *   event: grammar_chunk
+ *   data: {"content": "Korean Markdown string"}
+ *
+ *   event: vocabulary_chunk
+ *   data: {"words": [{"word": "string", "content": "Korean Markdown string"}, ...]}
+ *
+ *   event: done
+ *   data: {}
  */
 export function useTutorStream() {
   const [state, setState] = useState<TutorStreamState>({
     readingContent: "",
     grammarContent: "",
-    vocabularyContent: "",
+    vocabularyWords: [],
     isStreaming: false,
     error: null,
   });
@@ -41,7 +51,7 @@ export function useTutorStream() {
       error: null,
       readingContent: "",
       grammarContent: "",
-      vocabularyContent: "",
+      vocabularyWords: [],
     }));
 
     try {
@@ -91,21 +101,17 @@ export function useTutorStream() {
               if (currentEvent === "reading_chunk") {
                 setState((prev) => ({
                   ...prev,
-                  readingContent: data.summary || data.content || JSON.stringify(data, null, 2),
+                  readingContent: data.content || "",
                 }));
               } else if (currentEvent === "grammar_chunk") {
                 setState((prev) => ({
                   ...prev,
-                  grammarContent: data.analysis || data.content || JSON.stringify(data, null, 2),
+                  grammarContent: data.content || "",
                 }));
               } else if (currentEvent === "vocabulary_chunk") {
-                // Map backend vocabulary format to frontend format
-                // Backend: { term, meaning, usage, synonyms }
-                // Frontend expects: { word, definition, example, difficulty }
-                const formattedVocab = formatVocabularyData(data);
                 setState((prev) => ({
                   ...prev,
-                  vocabularyContent: formattedVocab,
+                  vocabularyWords: data.words || [],
                 }));
               }
             } catch {
@@ -142,7 +148,7 @@ export function useTutorStream() {
     setState({
       readingContent: "",
       grammarContent: "",
-      vocabularyContent: "",
+      vocabularyWords: [],
       isStreaming: false,
       error: null,
     });
@@ -153,31 +159,4 @@ export function useTutorStream() {
     startStream,
     reset,
   };
-}
-
-/**
- * Format vocabulary data from backend format to display format
- * Backend sends: { words: [{ term, meaning, usage, synonyms }] }
- */
-function formatVocabularyData(data: {
-  words?: Array<{
-    term?: string;
-    meaning?: string;
-    usage?: string;
-    synonyms?: string[];
-  }>;
-}): string {
-  if (!data.words || data.words.length === 0) {
-    return "";
-  }
-
-  return data.words
-    .map((word, index) => {
-      const synonyms = word.synonyms?.slice(0, 3).join(", ") || "";
-      return `${index + 1}. **${word.term || "Unknown"}**
-   - Meaning: ${word.meaning || "N/A"}
-   - Usage: ${word.usage || "N/A"}
-   - Synonyms: ${synonyms || "N/A"}`;
-    })
-    .join("\n\n");
 }

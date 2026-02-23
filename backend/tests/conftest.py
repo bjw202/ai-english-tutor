@@ -8,15 +8,19 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def set_test_env():
-    """Set test environment variables before each test."""
+    """Set test environment variables before each test and reset settings cache."""
+    import tutor.config
+
+    # Reset cached settings to ensure test isolation
+    tutor.config._settings = None
+
     # Set required environment variables for testing
     os.environ["OPENAI_API_KEY"] = "test-key-for-testing"
-    os.environ["ANTHROPIC_API_KEY"] = "test-key-for-testing"
     os.environ["CORS_ORIGINS"] = "http://localhost:3000"
     yield
     # Clean up after test
+    tutor.config._settings = None
     os.environ.pop("OPENAI_API_KEY", None)
-    os.environ.pop("ANTHROPIC_API_KEY", None)
     os.environ.pop("CORS_ORIGINS", None)
 
 
