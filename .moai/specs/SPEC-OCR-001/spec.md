@@ -1,7 +1,7 @@
 ---
 id: SPEC-OCR-001
 version: 1.0.0
-status: Draft
+status: Completed
 created: 2026-02-23
 updated: 2026-02-23
 author: jw

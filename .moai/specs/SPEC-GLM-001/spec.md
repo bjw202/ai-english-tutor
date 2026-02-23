@@ -7,12 +7,18 @@
 | SPEC ID | SPEC-GLM-001 |
 | Title | GLM (Zhipu AI) Model Migration |
 | Created | 2026-02-23 |
-| Status | Partially Implemented |
+| Status | Superseded |
 | Priority | High |
 | Assigned | expert-backend |
 | Related SPECs | SPEC-BACKEND-001, SPEC-UPDATE-001 |
 | Epic | Infrastructure Optimization |
 | Labels | migration, llm, cost-optimization, korean |
+| Superseded By | SPEC-OCR-001 (OpenAI Vision replaces GLM-OCR), cost strategy revised |
+| Superseded Date | 2026-02-23 |
+
+> **Note:** This SPEC is superseded. The OCR portion was replaced by SPEC-OCR-001 (OpenAI Vision API).
+> GLM model migration for other agents (reading, grammar, vocabulary) was not pursued as the
+> current gpt-4o-mini setup is cost-effective and stable. No further implementation planned.
 
 ---
 
