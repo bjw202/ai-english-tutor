@@ -644,6 +644,25 @@ class TestImageProcessorAgent:
         assert "extracted_text" in result
         assert result["extracted_text"] == "The quick brown fox jumps over the lazy dog."
         assert result["input_text"] == "The quick brown fox jumps over the lazy dog."
+        assert result["task_type"] == "analyze"
+
+    @pytest.mark.asyncio
+    async def test_image_processor_returns_task_type_analyze_on_empty_image(
+        self, image_state: TutorState
+    ) -> None:
+        """
+        GIVEN a state with no image_data
+        WHEN image_processor_node is called
+        THEN it should return task_type='analyze' to prevent graph recursion loop
+        """
+        from tutor.agents.image_processor import image_processor_node
+
+        # image_state has no image_data by default
+        result = await image_processor_node(image_state)
+
+        assert result["task_type"] == "analyze"
+        assert result["extracted_text"] == ""
+        assert result["input_text"] == ""
 
     @pytest.mark.asyncio
     async def test_image_processor_handles_no_text_found(

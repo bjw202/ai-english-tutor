@@ -44,7 +44,7 @@ async def image_processor_node(state: TutorState) -> dict:
 
         if not image_data:
             logger.warning("No image_data provided to image_processor_node")
-            return {"extracted_text": "", "input_text": ""}
+            return {"extracted_text": "", "input_text": "", "task_type": "analyze"}
 
         settings = get_settings()
 
@@ -73,7 +73,7 @@ async def image_processor_node(state: TutorState) -> dict:
             raise RuntimeError("이미지에서 텍스트를 찾을 수 없습니다. 영어 텍스트가 포함된 이미지를 업로드해 주세요.")
 
         logger.info(f"OpenAI Vision extracted {len(extracted_text)} characters")
-        return {"extracted_text": extracted_text, "input_text": extracted_text}
+        return {"extracted_text": extracted_text, "input_text": extracted_text, "task_type": "analyze"}
 
     except RuntimeError:
         raise

@@ -78,6 +78,19 @@ export function useTutorStream() {
 
     try {
       const response = await fetchFn();
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        let errorMessage = `Analysis failed (${response.status})`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorData.detail || errorMessage;
+        } catch {
+          // not JSON, use default message
+        }
+        throw new Error(errorMessage);
+      }
+
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 

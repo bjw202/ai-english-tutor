@@ -117,7 +117,9 @@ async def _stream_with_heartbeat(input_state: dict) -> AsyncGenerator[dict | Non
     queue: asyncio.Queue[dict | None] = asyncio.Queue()
 
     async def _producer() -> None:
-        async for event in graph.astream_events(input_state, version="v2"):
+        async for event in graph.astream_events(
+            input_state, version="v2", config={"recursion_limit": 50}
+        ):
             await queue.put(event)
         await queue.put(None)  # sentinel indicating stream end
 
@@ -134,6 +136,12 @@ async def _stream_with_heartbeat(input_state: dict) -> AsyncGenerator[dict | Non
                     break
                 yield event
             except asyncio.TimeoutError:
+                # Check if producer task failed before sending heartbeat
+                if task.done() and not task.cancelled():
+                    try:
+                        task.result()  # raises if producer had an exception
+                    except Exception:
+                        break
                 yield None  # heartbeat signal
     finally:
         if not task.done():
