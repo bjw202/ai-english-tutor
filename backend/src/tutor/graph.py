@@ -20,6 +20,33 @@ from tutor.agents.vocabulary import vocabulary_node
 from tutor.state import TutorState
 
 
+def route_after_image(state: TutorState) -> list[Send]:
+    """
+    Route after image processing based on whether text was extracted.
+
+    If text was extracted, route back to supervisor with extracted text
+    as input_text so that supervisor can perform pre-analysis before
+    dispatching to tutor agents. This ensures analysis agents receive
+    supervisor_analysis for higher quality output.
+
+    If no text was extracted, go directly to aggregator.
+
+    Args:
+        state: TutorState containing extracted_text from image_processor_node
+
+    Returns:
+        A single Send to supervisor with updated state (input_text and task_type),
+        or a single Send to aggregator if no text was extracted
+    """
+    # @MX:NOTE: [AUTO] Re-routes OCR text through supervisor for pre-analysis
+    # @MX:SPEC: SPEC-IMAGE-001
+    extracted_text = state.get("extracted_text", "")
+    if extracted_text:
+        new_state = {**state, "input_text": extracted_text, "task_type": "analyze"}
+        return [Send("supervisor", new_state)]
+    return [Send("aggregator", state)]
+
+
 def route_by_task(state: TutorState) -> list[Send]:
     """
     Route to appropriate nodes based on task_type.
@@ -125,7 +152,9 @@ def create_graph():
     workflow.add_edge("reading", "aggregator")
     workflow.add_edge("grammar", "aggregator")
     workflow.add_edge("vocabulary", "aggregator")
-    workflow.add_edge("image_processor", "aggregator")
+
+    # After image processing, conditionally route to analysis agents or aggregator
+    workflow.add_conditional_edges("image_processor", route_after_image)
 
     # Exit point from aggregator to END
     workflow.add_edge("aggregator", END)

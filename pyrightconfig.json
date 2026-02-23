@@ -1,0 +1,21 @@
+{
+  "include": ["backend/src", "backend/tests"],
+  "extraPaths": ["backend/src"],
+  "executionEnvironments": [
+    {
+      "root": "backend/src",
+      "pythonVersion": "3.13",
+      "extraPaths": ["backend/src"]
+    },
+    {
+      "root": "backend/tests",
+      "pythonVersion": "3.13",
+      "extraPaths": ["backend/src"]
+    }
+  ],
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.13",
+  "pythonPlatform": "Darwin",
+  "venvPath": "backend",
+  "venv": ".venv"
+}

@@ -4,6 +4,11 @@
     {
       "root": "src",
       "pythonVersion": "3.13"
+    },
+    {
+      "root": "tests",
+      "pythonVersion": "3.13",
+      "extraPaths": ["src"]
     }
   ],
   "typeCheckingMode": "standard",

@@ -10,10 +10,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langgraph.constants import START, END
 
+from tutor.graph import create_graph, route_after_image, route_by_task
 from tutor.state import TutorState
-from tutor.graph import create_graph, route_by_task
 
 
 class TestRouteByTask:
@@ -143,6 +142,146 @@ class TestRouteByTask:
         assert len(result) == 3, "Should default to analyze (3 parallel agents)"
 
 
+class TestRouteAfterImage:
+    """Test suite for route_after_image routing function (SPEC-IMAGE-001)."""
+
+    def test_route_after_image_with_text_sends_to_supervisor(self) -> None:
+        """
+        Test that non-empty extracted_text routes to supervisor.
+
+        Given: A TutorState with non-empty extracted_text
+        When: route_after_image is called
+        Then: Returns a list with 1 Send to 'supervisor'
+        """
+        # Arrange
+        state: TutorState = {
+            "messages": [],
+            "level": 3,
+            "session_id": "test-image-001",
+            "input_text": "",
+            "task_type": "image_process",
+            "extracted_text": "The cat sat on the mat.",
+        }
+
+        # Act
+        result = route_after_image(state)
+
+        # Assert
+        assert len(result) == 1, "Should return exactly 1 Send object"
+        assert result[0].node == "supervisor", "Should route to supervisor"
+
+    def test_route_after_image_without_text_sends_to_aggregator(self) -> None:
+        """
+        Test that empty extracted_text routes to aggregator.
+
+        Given: A TutorState with empty extracted_text
+        When: route_after_image is called
+        Then: Returns a list with 1 Send to 'aggregator'
+        """
+        # Arrange
+        state: TutorState = {
+            "messages": [],
+            "level": 3,
+            "session_id": "test-image-002",
+            "input_text": "",
+            "task_type": "image_process",
+            "extracted_text": "",
+        }
+
+        # Act
+        result = route_after_image(state)
+
+        # Assert
+        assert len(result) == 1, "Should return exactly 1 Send object"
+        assert result[0].node == "aggregator", "Should route to aggregator"
+
+    def test_route_after_image_sets_task_type_to_analyze(self) -> None:
+        """
+        Test that the new state sent to supervisor has task_type='analyze'.
+
+        Given: A TutorState with extracted_text and task_type='image_process'
+        When: route_after_image is called
+        Then: The Send arg state has task_type='analyze'
+        """
+        # Arrange
+        state: TutorState = {
+            "messages": [],
+            "level": 3,
+            "session_id": "test-image-003",
+            "input_text": "",
+            "task_type": "image_process",
+            "extracted_text": "Hello world.",
+        }
+
+        # Act
+        result = route_after_image(state)
+
+        # Assert
+        new_state = result[0].arg
+        assert new_state["task_type"] == "analyze", (
+            "task_type should be set to 'analyze' for supervisor re-routing"
+        )
+
+    def test_route_after_image_sets_input_text_to_extracted_text(self) -> None:
+        """
+        Test that the new state sets input_text to the extracted_text value.
+
+        Given: A TutorState with extracted_text='Some OCR text'
+        When: route_after_image is called
+        Then: The Send arg state has input_text='Some OCR text'
+        """
+        # Arrange
+        ocr_text = "Some OCR text extracted from the image."
+        state: TutorState = {
+            "messages": [],
+            "level": 3,
+            "session_id": "test-image-004",
+            "input_text": "",
+            "task_type": "image_process",
+            "extracted_text": ocr_text,
+        }
+
+        # Act
+        result = route_after_image(state)
+
+        # Assert
+        new_state = result[0].arg
+        assert new_state["input_text"] == ocr_text, (
+            "input_text should be set to the extracted_text value"
+        )
+
+    def test_route_after_image_preserves_level_and_session(self) -> None:
+        """
+        Test that level and session_id are preserved in the new state.
+
+        Given: A TutorState with level=5 and session_id='abc-session'
+        When: route_after_image is called with extracted_text
+        Then: The Send arg state preserves level and session_id
+        """
+        # Arrange
+        state: TutorState = {
+            "messages": [{"role": "user", "content": "image"}],
+            "level": 5,
+            "session_id": "abc-session",
+            "input_text": "",
+            "task_type": "image_process",
+            "extracted_text": "Preserved fields test.",
+        }
+
+        # Act
+        result = route_after_image(state)
+
+        # Assert
+        new_state = result[0].arg
+        assert new_state["level"] == 5, "level should be preserved"
+        assert new_state["session_id"] == "abc-session", (
+            "session_id should be preserved"
+        )
+        assert new_state["messages"] == [{"role": "user", "content": "image"}], (
+            "messages should be preserved"
+        )
+
+
 class TestGraphCreation:
     """Test suite for graph creation and structure."""
 
@@ -237,15 +376,6 @@ class TestGraphFunctional:
         When: Invoked with valid state
         Then: Processes through all nodes and returns aggregated results
         """
-        # Arrange
-        state: TutorState = {
-            "messages": [{"role": "user", "content": "Test text for analysis."}],
-            "level": 3,
-            "session_id": "test-session-111",
-            "input_text": "Test text for analysis.",
-            "task_type": "analyze",
-        }
-
         # Mock the LLM calls to avoid actual API calls
         with patch("tutor.agents.reading.get_llm") as mock_reading_llm, patch(
             "tutor.agents.grammar.get_llm"
