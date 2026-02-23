@@ -107,6 +107,33 @@ export function useTutorStream() {
           if (line.startsWith("data: ")) {
             const dataStr = line.slice(6).trim();
 
+            // Handle error event from backend
+            if (currentEvent === "error") {
+              try {
+                const errorData = JSON.parse(dataStr);
+                const errorMessage =
+                  errorData.message || errorData.error || "Analysis failed";
+                setState((prev) => ({
+                  ...prev,
+                  isStreaming: false,
+                  readingStreaming: false,
+                  grammarStreaming: false,
+                  vocabularyStreaming: false,
+                  error: new Error(errorMessage),
+                }));
+              } catch {
+                setState((prev) => ({
+                  ...prev,
+                  isStreaming: false,
+                  readingStreaming: false,
+                  grammarStreaming: false,
+                  vocabularyStreaming: false,
+                  error: new Error(dataStr || "Analysis failed"),
+                }));
+              }
+              return;
+            }
+
             // Handle done event
             if (currentEvent === "done") {
               setState((prev) => ({

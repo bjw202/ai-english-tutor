@@ -32,6 +32,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["tutor"])
 
 
+_HEARTBEAT_INTERVAL_SECONDS = 5
+_SSE_HEARTBEAT_COMMENT = ": heartbeat\n\n"
+
+
 async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGenerator[str]:
     """Stream LangGraph events as SSE tokens.
 
@@ -40,15 +44,23 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
     - on_chat_model_stream + grammar node -> grammar_token
     - on_chain_end + aggregator -> vocabulary_chunk (batch)
 
+    Sends SSE comment heartbeats every 5 seconds during idle periods
+    (e.g. while waiting for OpenAI Vision API) to prevent proxy timeouts.
+
     Args:
         input_state: The initial state dict to pass to the graph
         session_id: The session ID to include in the done event
 
     Yields:
-        Formatted SSE event strings
+        Formatted SSE event strings (or SSE comment heartbeats)
     """
     try:
-        async for event in graph.astream_events(input_state, version="v2"):
+        async for event in _stream_with_heartbeat(input_state):
+            if event is None:
+                # No graph event within the heartbeat interval; send keep-alive
+                yield _SSE_HEARTBEAT_COMMENT
+                continue
+
             kind = event["event"]
 
             # Token-level streaming for reading and grammar
@@ -87,6 +99,49 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
         pass
     except Exception as e:
         yield format_error_event(str(e), "processing_error")
+
+
+async def _stream_with_heartbeat(input_state: dict) -> AsyncGenerator[dict | None]:
+    """Wrap graph.astream_events with periodic heartbeat signals.
+
+    Yields graph events as they arrive. When no event arrives within
+    ``_HEARTBEAT_INTERVAL_SECONDS``, yields ``None`` to signal that the
+    caller should emit an SSE keep-alive comment.
+
+    Args:
+        input_state: The initial state dict forwarded to the graph.
+
+    Yields:
+        A graph event dict, or ``None`` when the heartbeat interval elapses.
+    """
+    queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+    async def _producer() -> None:
+        async for event in graph.astream_events(input_state, version="v2"):
+            await queue.put(event)
+        await queue.put(None)  # sentinel indicating stream end
+
+    task = asyncio.create_task(_producer())
+
+    try:
+        while True:
+            try:
+                event = await asyncio.wait_for(
+                    queue.get(), timeout=_HEARTBEAT_INTERVAL_SECONDS
+                )
+                if event is None:
+                    # Producer finished; stop iteration
+                    break
+                yield event
+            except asyncio.TimeoutError:
+                yield None  # heartbeat signal
+    finally:
+        if not task.done():
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
 
 
 @router.get("/health")

@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
+export const maxDuration = 60;
+
 /**
  * Route handler for image analysis
  * Converts file to base64 and sends JSON to FastAPI backend
