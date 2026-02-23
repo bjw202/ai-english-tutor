@@ -31,6 +31,8 @@ class TutorState(TypedDict):
         extracted_text: Optional OCR-extracted text from image processing
         task_type: Type of task to execute ("analyze" | "image_process" | "chat")
         supervisor_analysis: Optional pre-analysis result from supervisor LLM
+        image_data: Optional base64-encoded image data for image processing
+        mime_type: Optional MIME type of the uploaded image
     """
 
     # Required fields
@@ -46,3 +48,5 @@ class TutorState(TypedDict):
     vocabulary_result: NotRequired[VocabularyResult | None]
     extracted_text: NotRequired[str | None]
     supervisor_analysis: NotRequired[SupervisorAnalysis | None]
+    image_data: NotRequired[str | None]
+    mime_type: NotRequired[str | None]
