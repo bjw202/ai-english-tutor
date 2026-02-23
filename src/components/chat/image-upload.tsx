@@ -59,6 +59,7 @@ export function ImageUpload({
     if (file) {
       handleFileSelect(file);
     }
+    e.target.value = "";
   };
 
   const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
