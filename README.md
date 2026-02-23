@@ -116,7 +116,6 @@ cp .env.example .env
 OPENAI_API_KEY=sk-...
 ENVIRONMENT=development
 LOG_LEVEL=DEBUG
-GLM_API_KEY=            # 선택: GLM (Zhipu AI) 사용 시에만 필요
 ```
 
 ### 개발 서버 실행
@@ -214,7 +213,7 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 
 ### 백엔드
 
-- **테스트**: 230개 통과
+- **테스트**: 235개 통과
 - **커버리지**: 97% (Lines)
 - **Ruff**: 0 에러
 - **LLM 모델 통합**: 모든 에이전트 gpt-4o-mini 통일 (비용 95% 절감)
