@@ -6,18 +6,38 @@ import type { VocabularyResult } from "@/types/tutor";
 interface VocabularyPanelProps {
   result: VocabularyResult | null;
   className?: string;
+  isStreaming?: boolean;
 }
 
 /**
  * Vocabulary etymology learning panel
  * Displays list of words with Korean Markdown etymology explanations
  */
-export function VocabularyPanel({ result, className }: VocabularyPanelProps) {
-  if (!result || !result.words || result.words.length === 0) {
+export function VocabularyPanel({ result, className, isStreaming = false }: VocabularyPanelProps) {
+  if ((!result || !result.words || result.words.length === 0) && !isStreaming) {
     return (
       <Card className={className}>
         <CardContent className="p-6 text-center text-muted-foreground">
           아직 어휘 분석이 없습니다
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isStreaming && (!result || !result.words || result.words.length === 0)) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="text-lg">어휘 어원 학습</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="animate-pulse space-y-2">
+              <div className="h-4 bg-muted rounded w-1/4" />
+              <div className="h-3 bg-muted rounded w-3/4" />
+              <div className="h-3 bg-muted rounded w-1/2" />
+            </div>
+          ))}
         </CardContent>
       </Card>
     );
@@ -29,7 +49,7 @@ export function VocabularyPanel({ result, className }: VocabularyPanelProps) {
         <CardTitle className="text-lg">어휘 어원 학습</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {result.words.map((entry, index) => (
+        {result!.words.map((entry, index) => (
           <div key={index}>
             {index > 0 && <hr className="mb-6" />}
             <h3 className="text-base font-semibold mb-2">{entry.word}</h3>

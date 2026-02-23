@@ -36,3 +36,12 @@ export interface AnalyzeResponse {
   vocabulary: VocabularyResult | null;
   sessionId: string;
 }
+
+/**
+ * Per-section streaming state for progressive display
+ */
+export interface SectionStreamingState {
+  readingStreaming: boolean;
+  grammarStreaming: boolean;
+  vocabularyStreaming: boolean;
+}

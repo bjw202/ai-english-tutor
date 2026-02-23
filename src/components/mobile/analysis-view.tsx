@@ -46,6 +46,10 @@ export function AnalysisView({ streamState }: AnalysisViewProps) {
               ? { words: streamState.vocabularyWords }
               : null
           }
+          isStreaming={streamState.isStreaming}
+          readingStreaming={streamState.readingStreaming}
+          grammarStreaming={streamState.grammarStreaming}
+          vocabularyStreaming={streamState.vocabularyStreaming}
         />
       </div>
     </div>

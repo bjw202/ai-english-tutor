@@ -6,14 +6,15 @@ import type { GrammarResult } from "@/types/tutor";
 interface GrammarPanelProps {
   result: GrammarResult | null;
   className?: string;
+  isStreaming?: boolean;
 }
 
 /**
  * Grammar structure understanding panel
  * Displays Korean Markdown content for grammar analysis
  */
-export function GrammarPanel({ result, className }: GrammarPanelProps) {
-  if (!result) {
+export function GrammarPanel({ result, className, isStreaming = false }: GrammarPanelProps) {
+  if (!result && !isStreaming) {
     return (
       <Card className={className}>
         <CardContent className="p-6 text-center text-muted-foreground">
@@ -30,7 +31,10 @@ export function GrammarPanel({ result, className }: GrammarPanelProps) {
       </CardHeader>
       <CardContent>
         <div className="prose prose-sm dark:prose-invert max-w-none">
-          <ReactMarkdown>{result.content}</ReactMarkdown>
+          <ReactMarkdown>{result?.content || ""}</ReactMarkdown>
+          {isStreaming && (
+            <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-0.5" />
+          )}
         </div>
       </CardContent>
     </Card>

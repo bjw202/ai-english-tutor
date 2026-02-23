@@ -74,19 +74,54 @@ class TestAnalyzeEndpoint:
 
     def test_analyze_endpoint_streams_sse(self, client, mock_graph, mock_session_manager):
         """Test that analyze endpoint returns SSE stream with correct events."""
-        # Mock graph result
-        from tutor.schemas import GrammarResult, ReadingResult, VocabularyResult
+        from tutor.schemas import AnalyzeResponse, VocabularyResult, VocabularyWordEntry
 
-        from tutor.schemas import VocabularyWordEntry
+        # Mock astream_events as an async generator
+        async def mock_astream_events(*args, **kwargs):
+            # Reading token
+            chunk = MagicMock()
+            chunk.content = "Reading content"
+            yield {
+                "event": "on_chat_model_stream",
+                "metadata": {"langgraph_node": "reading"},
+                "data": {"chunk": chunk},
+            }
+            # Reading done
+            yield {
+                "event": "on_chain_end",
+                "name": "reading",
+                "data": {"output": {}},
+            }
+            # Grammar token
+            chunk = MagicMock()
+            chunk.content = "Grammar analysis"
+            yield {
+                "event": "on_chat_model_stream",
+                "metadata": {"langgraph_node": "grammar"},
+                "data": {"chunk": chunk},
+            }
+            # Grammar done
+            yield {
+                "event": "on_chain_end",
+                "name": "grammar",
+                "data": {"output": {}},
+            }
+            # Aggregator done with vocabulary
+            analyze_response = AnalyzeResponse(
+                session_id="test-session-123",
+                reading=None,
+                grammar=None,
+                vocabulary=VocabularyResult(
+                    words=[VocabularyWordEntry(word="test", content="**어원:** 테스트 어원 설명.")]
+                ),
+            )
+            yield {
+                "event": "on_chain_end",
+                "name": "aggregator",
+                "data": {"output": {"analyze_response": analyze_response}},
+            }
 
-        mock_graph.ainvoke.return_value = {
-            "messages": [],
-            "reading_result": ReadingResult(content="## 독해 훈련\n\nTest reading content."),
-            "grammar_result": GrammarResult(content="## 문법 구조 이해\n\nTest grammar analysis."),
-            "vocabulary_result": VocabularyResult(
-                words=[VocabularyWordEntry(word="test", content="**어원:** 테스트 어원 설명.")]
-            ),
-        }
+        mock_graph.astream_events = mock_astream_events
 
         response = client.post(
             "/api/v1/tutor/analyze", json={"text": "This is a test text for analysis.", "level": 3}
@@ -99,10 +134,12 @@ class TestAnalyzeEndpoint:
         content = response.text
         events = self._parse_sse_events(content)
 
-        # Verify expected events
+        # Verify expected token-level streaming events
         event_types = [e["event"] for e in events]
-        assert "reading_chunk" in event_types
-        assert "grammar_chunk" in event_types
+        assert "reading_token" in event_types
+        assert "grammar_token" in event_types
+        assert "reading_done" in event_types
+        assert "grammar_done" in event_types
         assert "vocabulary_chunk" in event_types
         assert "done" in event_types
 
@@ -159,14 +196,28 @@ class TestAnalyzeImageEndpoint:
 
     def test_analyze_image_endpoint_streams_sse(self, client, mock_graph, mock_session_manager):
         """Test that analyze-image endpoint processes image and streams SSE."""
-        # Mock graph result
-        from tutor.schemas import ReadingResult
 
-        mock_graph.ainvoke.return_value = {
-            "messages": [],
-            "reading_result": ReadingResult(content="## 독해 훈련\n\nImage text content."),
-            "extracted_text": "Text extracted from image",
-        }
+        # Mock astream_events as an async generator
+        async def mock_astream_events(*args, **kwargs):
+            chunk = MagicMock()
+            chunk.content = "Image text content."
+            yield {
+                "event": "on_chat_model_stream",
+                "metadata": {"langgraph_node": "reading"},
+                "data": {"chunk": chunk},
+            }
+            yield {
+                "event": "on_chain_end",
+                "name": "reading",
+                "data": {"output": {}},
+            }
+            yield {
+                "event": "on_chain_end",
+                "name": "aggregator",
+                "data": {"output": {}},
+            }
+
+        mock_graph.astream_events = mock_astream_events
 
         # Valid base64 image (1x1 pixel PNG)
         base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="

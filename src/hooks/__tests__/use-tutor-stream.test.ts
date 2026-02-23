@@ -197,4 +197,150 @@ describe("useTutorStream", () => {
     expect(result.current.state.vocabularyWords).toEqual([]);
     expect(result.current.state.error).toBeNull();
   });
+
+  it("should append reading tokens sequentially via reading_token events", async () => {
+    const chunks = [
+      'event: reading_token\ndata: {"token": "Hello "}\n\n',
+      'event: reading_token\ndata: {"token": "world"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.readingContent).toBe("Hello world");
+  });
+
+  it("should append grammar tokens sequentially via grammar_token events", async () => {
+    const chunks = [
+      'event: grammar_token\ndata: {"token": "Grammar "}\n\n',
+      'event: grammar_token\ndata: {"token": "analysis"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.grammarContent).toBe("Grammar analysis");
+  });
+
+  it("should set readingStreaming to false on reading_done event", async () => {
+    const chunks = [
+      'event: reading_token\ndata: {"token": "text"}\n\n',
+      'event: reading_done\ndata: {"section": "reading"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.readingStreaming).toBe(false);
+    expect(result.current.state.readingContent).toBe("text");
+  });
+
+  it("should set grammarStreaming to false on grammar_done event", async () => {
+    const chunks = [
+      'event: grammar_token\ndata: {"token": "analysis"}\n\n',
+      'event: grammar_done\ndata: {"section": "grammar"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.grammarStreaming).toBe(false);
+    expect(result.current.state.grammarContent).toBe("analysis");
+  });
+
+  it("should set vocabularyStreaming to false on vocabulary_chunk event", async () => {
+    const words = [{ word: "test", content: "content" }];
+    const chunks = [
+      `event: vocabulary_chunk\ndata: ${JSON.stringify({ words })}\n\n`,
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.vocabularyStreaming).toBe(false);
+    expect(result.current.state.vocabularyWords).toHaveLength(1);
+  });
+
+  it("should have section streaming flags as false in initial state", () => {
+    const { result } = renderHook(() => useTutorStream());
+
+    expect(result.current.state.readingStreaming).toBe(false);
+    expect(result.current.state.grammarStreaming).toBe(false);
+    expect(result.current.state.vocabularyStreaming).toBe(false);
+  });
 });

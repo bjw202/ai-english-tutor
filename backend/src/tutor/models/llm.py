@@ -66,6 +66,7 @@ def get_llm(model_name: str, max_tokens: int | None = None, timeout: int = 120) 
             max_retries=2,
             max_tokens=max_tokens if max_tokens is not None else 4096,
             api_key=settings.OPENAI_API_KEY,
+            streaming=True,
         )
 
     if model_name.startswith("glm-"):
@@ -81,6 +82,7 @@ def get_llm(model_name: str, max_tokens: int | None = None, timeout: int = 120) 
             max_tokens=max_tokens if max_tokens is not None else 4096,
             api_key=settings.GLM_API_KEY,
             base_url="https://open.bigmodel.cn/api/paas/v4/",
+            streaming=True,
         )
 
     raise ValueError(f"Unknown model: {model_name}")

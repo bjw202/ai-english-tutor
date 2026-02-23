@@ -83,3 +83,39 @@ def format_error_event(message: str, code: str = "error") -> str:
         A formatted SSE event with event_type="error"
     """
     return format_sse_event("error", {"message": message, "code": code})
+
+
+def format_reading_token(token: str) -> str:
+    """Format a single reading token as SSE event.
+
+    Args:
+        token: A single token string from the reading agent LLM stream
+
+    Returns:
+        A formatted SSE event with event_type="reading_token"
+    """
+    return format_sse_event("reading_token", {"token": token})
+
+
+def format_grammar_token(token: str) -> str:
+    """Format a single grammar token as SSE event.
+
+    Args:
+        token: A single token string from the grammar agent LLM stream
+
+    Returns:
+        A formatted SSE event with event_type="grammar_token"
+    """
+    return format_sse_event("grammar_token", {"token": token})
+
+
+def format_section_done(section: str) -> str:
+    """Format section completion as SSE event.
+
+    Args:
+        section: The section name that completed (e.g., "reading", "grammar")
+
+    Returns:
+        A formatted SSE event with event_type="{section}_done"
+    """
+    return format_sse_event(f"{section}_done", {"section": section})

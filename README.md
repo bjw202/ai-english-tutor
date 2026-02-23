@@ -72,7 +72,7 @@ ai-english-tutor/
 - **어원 네트워크 어휘**: PIE 어근부터 현재 의미까지의 발전 과정을 통한 깊이 있는 어휘 학습
 - **이미지 분석**: 교과서 이미지 업로드 후 OCR 기반 한국어 교육 분석
 - **이해도 조절**: Level 1-5 슬라이더로 한국 교육학적 설명 깊이 조절
-- **실시간 스트리밍**: SSE(Server-Sent Events) 기반 실시간 응답
+- **실시간 스트리밍**: SSE 기반 토큰 단위 스트리밍 (ChatGPT 스타일 타이핑 효과)
 
 ## 설치 및 실행
 
@@ -188,11 +188,25 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 | `/api/v1/tutor/analyze-image` | POST | 이미지 분석 |
 | `/api/v1/tutor/chat` | POST | 채팅 |
 
+### SSE 이벤트 타입
+
+`/api/v1/tutor/analyze` 및 `/api/v1/tutor/analyze-image` 엔드포인트의 SSE 이벤트:
+
+| 이벤트 | 페이로드 | 설명 |
+|--------|----------|------|
+| `reading_token` | `{"token": "..."}` | 독해 분석 토큰 (실시간) |
+| `grammar_token` | `{"token": "..."}` | 문법 분석 토큰 (실시간) |
+| `reading_done` | `{"section": "reading"}` | 독해 섹션 완료 |
+| `grammar_done` | `{"section": "grammar"}` | 문법 섹션 완료 |
+| `vocabulary_chunk` | `{"words": [...]}` | 어휘 분석 결과 (일괄) |
+| `done` | `{"session_id": "...", "status": "complete"}` | 전체 완료 |
+| `error` | `{"message": "...", "code": "..."}` | 오류 |
+
 ## 품질 지표
 
 ### 프론트엔드
 
-- **테스트**: 97개 통과 (모바일 반응형 UI 포함)
+- **테스트**: 103개 통과 (스트리밍 테스트 12개 포함)
 - **커버리지**: 91.98% (Lines), 86.5% (Branches)
 - **TypeScript**: strict mode, 0 에러
 - **ESLint**: 0 에러
@@ -200,8 +214,8 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 
 ### 백엔드
 
-- **테스트**: 207개 통과
-- **커버리지**: 83% (Lines)
+- **테스트**: 230개 통과
+- **커버리지**: 97% (Lines)
 - **Ruff**: 0 에러
 - **LLM 모델 통합**: 모든 에이전트 gpt-4o-mini 통일 (비용 95% 절감)
 

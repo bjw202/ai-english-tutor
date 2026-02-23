@@ -10,6 +10,10 @@ interface TabbedOutputProps {
   grammar: GrammarResult | null;
   vocabulary: VocabularyResult | null;
   className?: string;
+  isStreaming?: boolean;
+  readingStreaming?: boolean;
+  grammarStreaming?: boolean;
+  vocabularyStreaming?: boolean;
 }
 
 /**
@@ -20,10 +24,14 @@ export function TabbedOutput({
   grammar,
   vocabulary,
   className,
+  isStreaming = false,
+  readingStreaming = false,
+  grammarStreaming = false,
+  vocabularyStreaming = false,
 }: TabbedOutputProps) {
   const [activeTab, setActiveTab] = useState("reading");
 
-  const hasContent = reading || grammar || vocabulary;
+  const hasContent = isStreaming || reading || grammar || vocabulary;
 
   if (!hasContent) {
     return (
@@ -37,21 +45,27 @@ export function TabbedOutput({
     <div className={`h-full ${className || ""}`}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
         <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
-          <TabsTrigger value="reading">독해</TabsTrigger>
-          <TabsTrigger value="grammar">문법</TabsTrigger>
-          <TabsTrigger value="vocabulary">어휘</TabsTrigger>
+          <TabsTrigger value="reading">
+            독해{readingStreaming && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
+          </TabsTrigger>
+          <TabsTrigger value="grammar">
+            문법{grammarStreaming && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
+          </TabsTrigger>
+          <TabsTrigger value="vocabulary">
+            어휘{vocabularyStreaming && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="reading" className="mt-4 flex-1 overflow-y-auto">
-          <ReadingPanel result={reading} />
+          <ReadingPanel result={reading} isStreaming={readingStreaming} />
         </TabsContent>
 
         <TabsContent value="grammar" className="mt-4 flex-1 overflow-y-auto">
-          <GrammarPanel result={grammar} />
+          <GrammarPanel result={grammar} isStreaming={grammarStreaming} />
         </TabsContent>
 
         <TabsContent value="vocabulary" className="mt-4 flex-1 overflow-y-auto">
-          <VocabularyPanel result={vocabulary} />
+          <VocabularyPanel result={vocabulary} isStreaming={vocabularyStreaming} />
         </TabsContent>
       </Tabs>
     </div>

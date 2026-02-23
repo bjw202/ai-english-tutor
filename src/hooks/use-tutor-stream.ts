@@ -7,11 +7,27 @@ export interface TutorStreamState {
   vocabularyWords: VocabularyWordEntry[];
   isStreaming: boolean;
   error: Error | null;
+  readingStreaming: boolean;
+  grammarStreaming: boolean;
+  vocabularyStreaming: boolean;
 }
 
 /**
  * Hook to manage SSE streaming from the tutor API
- * Parses SSE events in format:
+ * Supports token-level streaming events:
+ *   event: reading_token
+ *   data: {"token": "string"}
+ *
+ *   event: grammar_token
+ *   data: {"token": "string"}
+ *
+ *   event: reading_done
+ *   data: {"section": "reading"}
+ *
+ *   event: grammar_done
+ *   data: {"section": "grammar"}
+ *
+ * Also supports backward-compatible chunk events:
  *   event: reading_chunk
  *   data: {"content": "Korean Markdown string"}
  *
@@ -31,6 +47,9 @@ export function useTutorStream() {
     vocabularyWords: [],
     isStreaming: false,
     error: null,
+    readingStreaming: false,
+    grammarStreaming: false,
+    vocabularyStreaming: false,
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -52,6 +71,9 @@ export function useTutorStream() {
       readingContent: "",
       grammarContent: "",
       vocabularyWords: [],
+      readingStreaming: true,
+      grammarStreaming: true,
+      vocabularyStreaming: true,
     }));
 
     try {
@@ -90,6 +112,9 @@ export function useTutorStream() {
               setState((prev) => ({
                 ...prev,
                 isStreaming: false,
+                readingStreaming: false,
+                grammarStreaming: false,
+                vocabularyStreaming: false,
               }));
               return;
             }
@@ -98,12 +123,35 @@ export function useTutorStream() {
             try {
               const data = JSON.parse(dataStr);
 
-              if (currentEvent === "reading_chunk") {
+              // NEW: Token-level streaming events
+              if (currentEvent === "reading_token") {
+                setState((prev) => ({
+                  ...prev,
+                  readingContent: prev.readingContent + (data.token || ""),
+                }));
+              } else if (currentEvent === "grammar_token") {
+                setState((prev) => ({
+                  ...prev,
+                  grammarContent: prev.grammarContent + (data.token || ""),
+                }));
+              } else if (currentEvent === "reading_done") {
+                setState((prev) => ({
+                  ...prev,
+                  readingStreaming: false,
+                }));
+              } else if (currentEvent === "grammar_done") {
+                setState((prev) => ({
+                  ...prev,
+                  grammarStreaming: false,
+                }));
+              } else if (currentEvent === "reading_chunk") {
+                // Backward compatibility: full chunk replacement
                 setState((prev) => ({
                   ...prev,
                   readingContent: data.content || "",
                 }));
               } else if (currentEvent === "grammar_chunk") {
+                // Backward compatibility: full chunk replacement
                 setState((prev) => ({
                   ...prev,
                   grammarContent: data.content || "",
@@ -112,6 +160,7 @@ export function useTutorStream() {
                 setState((prev) => ({
                   ...prev,
                   vocabularyWords: data.words || [],
+                  vocabularyStreaming: false,
                 }));
               }
             } catch {
@@ -126,12 +175,18 @@ export function useTutorStream() {
       setState((prev) => ({
         ...prev,
         isStreaming: false,
+        readingStreaming: false,
+        grammarStreaming: false,
+        vocabularyStreaming: false,
       }));
     } catch (error) {
       if (error instanceof Error && error.name !== "AbortError") {
         setState((prev) => ({
           ...prev,
           isStreaming: false,
+          readingStreaming: false,
+          grammarStreaming: false,
+          vocabularyStreaming: false,
           error,
         }));
       }
@@ -151,6 +206,9 @@ export function useTutorStream() {
       vocabularyWords: [],
       isStreaming: false,
       error: null,
+      readingStreaming: false,
+      grammarStreaming: false,
+      vocabularyStreaming: false,
     });
   }, []);
 

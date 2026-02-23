@@ -6,6 +6,7 @@ image analysis, and chat functionality with SSE streaming.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -20,14 +21,72 @@ from tutor.services.image import validate_image
 from tutor.services.streaming import (
     format_done_event,
     format_error_event,
-    format_grammar_chunk,
-    format_reading_chunk,
+    format_grammar_token,
+    format_reading_token,
+    format_section_done,
     format_vocabulary_chunk,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["tutor"])
+
+
+async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGenerator[str]:
+    """Stream LangGraph events as SSE tokens.
+
+    Routes astream_events to appropriate SSE event types:
+    - on_chat_model_stream + reading node -> reading_token
+    - on_chat_model_stream + grammar node -> grammar_token
+    - on_chain_end + aggregator -> vocabulary_chunk (batch)
+
+    Args:
+        input_state: The initial state dict to pass to the graph
+        session_id: The session ID to include in the done event
+
+    Yields:
+        Formatted SSE event strings
+    """
+    try:
+        async for event in graph.astream_events(input_state, version="v2"):
+            kind = event["event"]
+
+            # Token-level streaming for reading and grammar
+            if kind == "on_chat_model_stream":
+                node = event.get("metadata", {}).get("langgraph_node", "")
+                chunk = event["data"].get("chunk")
+                if chunk:
+                    token = chunk.content if hasattr(chunk, "content") else str(chunk)
+                    if token:  # Skip empty tokens
+                        if node == "reading":
+                            yield format_reading_token(token)
+                        elif node == "grammar":
+                            yield format_grammar_token(token)
+
+            # Section completion events
+            elif kind == "on_chain_end":
+                node_name = event.get("name", "")
+                if node_name == "reading":
+                    yield format_section_done("reading")
+                elif node_name == "grammar":
+                    yield format_section_done("grammar")
+                elif node_name == "aggregator":
+                    # Extract vocabulary from aggregator output
+                    output = event.get("data", {}).get("output", {})
+                    analyze_response = output.get("analyze_response")
+                    if (
+                        analyze_response
+                        and hasattr(analyze_response, "vocabulary")
+                        and analyze_response.vocabulary
+                    ):
+                        yield format_vocabulary_chunk(analyze_response.vocabulary.model_dump())
+
+        yield format_done_event(session_id)
+
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        yield format_error_event(str(e), "processing_error")
 
 
 @router.get("/health")
@@ -84,35 +143,16 @@ async def analyze(request: AnalyzeRequest) -> StreamingResponse:
 
     async def generate() -> AsyncGenerator[str]:
         """Generate SSE events from LangGraph execution."""
-        try:
-            # Create new session
-            session_id = session_manager.create()
-
-            # Run LangGraph pipeline
-            result = await graph.ainvoke(
-                {
-                    "messages": [],
-                    "level": request.level,
-                    "session_id": session_id,
-                    "input_text": request.text,
-                    "task_type": "analyze",
-                }
-            )
-
-            # Stream results as SSE events
-            if result.get("reading_result"):
-                yield format_reading_chunk(result["reading_result"].model_dump())
-
-            if result.get("grammar_result"):
-                yield format_grammar_chunk(result["grammar_result"].model_dump())
-
-            if result.get("vocabulary_result"):
-                yield format_vocabulary_chunk(result["vocabulary_result"].model_dump())
-
-            yield format_done_event(session_id)
-
-        except Exception as e:
-            yield format_error_event(str(e), "processing_error")
+        session_id = session_manager.create()
+        input_state = {
+            "messages": [],
+            "level": request.level,
+            "session_id": session_id,
+            "input_text": request.text,
+            "task_type": "analyze",
+        }
+        async for event in _stream_graph_events(input_state, session_id):
+            yield event
 
     return StreamingResponse(
         generate(),
@@ -161,37 +201,18 @@ async def analyze_image(request: AnalyzeImageRequest) -> StreamingResponse:
 
     async def generate() -> AsyncGenerator[str]:
         """Generate SSE events from image processing."""
-        try:
-            # Create new session
-            session_id = session_manager.create()
-
-            # Run LangGraph pipeline for image processing
-            result = await graph.ainvoke(
-                {
-                    "messages": [],
-                    "level": request.level,
-                    "session_id": session_id,
-                    "input_text": "",  # Will be populated from image
-                    "task_type": "image_process",
-                    "image_data": request.image_data,
-                    "mime_type": request.mime_type,
-                }
-            )
-
-            # Stream results as SSE events
-            if result.get("reading_result"):
-                yield format_reading_chunk(result["reading_result"].model_dump())
-
-            if result.get("grammar_result"):
-                yield format_grammar_chunk(result["grammar_result"].model_dump())
-
-            if result.get("vocabulary_result"):
-                yield format_vocabulary_chunk(result["vocabulary_result"].model_dump())
-
-            yield format_done_event(session_id)
-
-        except Exception as e:
-            yield format_error_event(str(e), "processing_error")
+        session_id = session_manager.create()
+        input_state = {
+            "messages": [],
+            "level": request.level,
+            "session_id": session_id,
+            "input_text": "",
+            "task_type": "image_process",
+            "image_data": request.image_data,
+            "mime_type": request.mime_type,
+        }
+        async for event in _stream_graph_events(input_state, session_id):
+            yield event
 
     return StreamingResponse(
         generate(),
