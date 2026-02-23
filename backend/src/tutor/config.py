@@ -17,12 +17,14 @@ class Settings(BaseSettings):
         OPENAI_API_KEY: OpenAI API key for LLM access
 
     Optional fields with defaults:
-        GLM_API_KEY: Zhipu AI API key for GLM models (optional, for OCR)
+        GLM_API_KEY: Zhipu AI API key for GLM models (optional)
         SUPERVISOR_MODEL: Model for supervisor agent (default: gpt-4o-mini)
         READING_MODEL: Model for reading comprehension (default: gpt-4o-mini)
         GRAMMAR_MODEL: Model for grammar correction (default: gpt-4o-mini)
         VOCABULARY_MODEL: Model for vocabulary exercises (default: gpt-4o-mini)
-        OCR_MODEL: Model for image OCR (default: glm-4v-flash)
+        OCR_MODEL: Model for image OCR via OpenAI Vision (default: gpt-4o-mini)
+        OCR_DETAIL: Vision API detail level (default: low)
+        OCR_MAX_TOKENS: Maximum tokens for OCR response (default: 2048)
         HOST: Server host address (default: 0.0.0.0)
         PORT: Server port (default: 8000)
         CORS_ORIGINS: Comma-separated list of allowed origins (default: http://localhost:3000)
@@ -31,7 +33,7 @@ class Settings(BaseSettings):
 
     # LLM API Keys
     OPENAI_API_KEY: str
-    GLM_API_KEY: str | None = None  # For GLM/Zhipu AI models (OCR, optional)
+    GLM_API_KEY: str | None = None  # For GLM/Zhipu AI models (optional)
 
     # Application Environment
     ENVIRONMENT: str = "development"
@@ -42,7 +44,9 @@ class Settings(BaseSettings):
     READING_MODEL: str = "gpt-4o-mini"
     GRAMMAR_MODEL: str = "gpt-4o-mini"
     VOCABULARY_MODEL: str = "gpt-4o-mini"
-    OCR_MODEL: str = "glm-4v-flash"
+    OCR_MODEL: str = "gpt-4o-mini"
+    OCR_DETAIL: str = "low"
+    OCR_MAX_TOKENS: int = 2048
 
     # Server Configuration
     HOST: str = "0.0.0.0"
@@ -83,7 +87,7 @@ def get_settings() -> Settings:
     """
     global _settings
     if _settings is None:
-        _settings = Settings()
+        _settings = Settings()  # type: ignore[call-arg]  # pydantic-settings reads from env vars
     return _settings
 
 

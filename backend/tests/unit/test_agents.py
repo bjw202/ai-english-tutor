@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import base64
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from tutor.schemas import (
     AnalyzeResponse,
@@ -623,63 +623,52 @@ class TestImageProcessorAgent:
     async def test_image_processor_extracts_text(self, image_state: TutorState) -> None:
         """
         GIVEN a state with image_data
-        WHEN image_processor_node is called
-        THEN it should extract text from the image
+        WHEN image_processor_node is called with a successful OpenAI Vision response
+        THEN it should return extracted_text from response.content
         """
         from tutor.agents.image_processor import image_processor_node
 
-        # Create proper base64 encoded test data
-        test_text = "The quick brown fox jumps over the lazy dog."
-        test_bytes = test_text.encode("utf-8")
-        base64_data = base64.b64encode(test_bytes).decode("utf-8")
-
-        # Mock LLM response
-        mock_response = MagicMock()
-        mock_response.content = "The quick brown fox jumps over the lazy dog."
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
-
-        # Add image_data to state
-        image_state["image_data"] = base64_data  # Properly base64 encoded
+        base64_data = base64.b64encode(b"fake image bytes").decode("utf-8")
+        image_state["image_data"] = base64_data
         image_state["mime_type"] = "image/jpeg"
 
-        with patch("tutor.agents.image_processor.get_llm", return_value=mock_llm):
+        mock_response = MagicMock()
+        mock_response.content = "The quick brown fox jumps over the lazy dog."
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+
+        with patch("tutor.agents.image_processor.ChatOpenAI", return_value=mock_llm):
             result = await image_processor_node(image_state)
 
         assert "extracted_text" in result
         assert result["extracted_text"] == "The quick brown fox jumps over the lazy dog."
+        assert result["input_text"] == "The quick brown fox jumps over the lazy dog."
 
     @pytest.mark.asyncio
     async def test_image_processor_handles_no_text_found(
         self, image_state: TutorState
     ) -> None:
         """
-        GIVEN a state with image_data containing no text
+        GIVEN a state with image_data where Vision API returns empty content
         WHEN image_processor_node is called
-        THEN it should return empty string for extracted_text
+        THEN it should raise RuntimeError with a user-friendly message
         """
         from tutor.agents.image_processor import image_processor_node
 
-        # Create proper base64 encoded test data
-        test_bytes = b"test data"
-        base64_data = base64.b64encode(test_bytes).decode("utf-8")
-
-        # Mock LLM response
-        mock_response = MagicMock()
-        mock_response.content = "No text found in image."
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
-
-        # Add image_data to state
+        base64_data = base64.b64encode(b"image with no text").decode("utf-8")
         image_state["image_data"] = base64_data
         image_state["mime_type"] = "image/jpeg"
 
-        with patch("tutor.agents.image_processor.get_llm", return_value=mock_llm):
-            result = await image_processor_node(image_state)
+        mock_response = MagicMock()
+        mock_response.content = ""
 
-        assert "extracted_text" in result
-        # Empty or no-text indicator
-        assert result["extracted_text"] == "" or "No text found" in result["extracted_text"]
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+
+        with patch("tutor.agents.image_processor.ChatOpenAI", return_value=mock_llm):
+            with pytest.raises(RuntimeError, match="이미지에서 텍스트를 찾을 수 없습니다"):
+                await image_processor_node(image_state)
 
 
 class TestAggregatorAgent:

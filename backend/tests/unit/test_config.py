@@ -35,6 +35,8 @@ def clean_env() -> Generator[None, None, None]:
         "GRAMMAR_MODEL": os.environ.get("GRAMMAR_MODEL"),
         "VOCABULARY_MODEL": os.environ.get("VOCABULARY_MODEL"),
         "OCR_MODEL": os.environ.get("OCR_MODEL"),
+        "OCR_DETAIL": os.environ.get("OCR_DETAIL"),
+        "OCR_MAX_TOKENS": os.environ.get("OCR_MAX_TOKENS"),
         "HOST": os.environ.get("HOST"),
         "PORT": os.environ.get("PORT"),
         "CORS_ORIGINS": os.environ.get("CORS_ORIGINS"),
@@ -80,7 +82,9 @@ class TestSettingsDefaultValues:
         assert settings.READING_MODEL == "gpt-4o-mini"
         assert settings.GRAMMAR_MODEL == "gpt-4o-mini"
         assert settings.VOCABULARY_MODEL == "gpt-4o-mini"
-        assert settings.OCR_MODEL == "glm-4v-flash"
+        assert settings.OCR_MODEL == "gpt-4o-mini"
+        assert settings.OCR_DETAIL == "low"
+        assert settings.OCR_MAX_TOKENS == 2048
 
     def test_default_server_settings(self, clean_env: None) -> None:
         """Should apply default values for server configuration when not provided."""
