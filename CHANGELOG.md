@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-02-24
+
+### Fixed
+- **Image Analysis Pipeline (SPEC-IMAGE-001)** - 4중 버그 수정으로 이미지 분석 기능 안정화
+
+  **Bug-1: TutorState 누락 필드 (e624069)**
+  - `backend/src/tutor/state.py`에 `image_data`와 `mime_type` 필드 추가
+  - LangGraph StateGraph는 TypedDict에 정의된 키만 상태로 유지하므로 필드 누락 시 이미지 데이터가 조용히 사라짐
+  - `NotRequired[str | None]` 타입으로 선택적 필드 정의
+
+  **Bug-2: Vercel 서버리스 타임아웃 (477f00b)**
+  - Next.js Route Handler에 `export const maxDuration = 60` 추가 (Hobby 플랜 최대값)
+  - FastAPI SSE 라우터에 5초 간격 하트비트 추가 (`: comment\n\n` 형식)
+  - OpenAI Vision API 처리 시간(25-35초)이 Vercel 기본 타임아웃(10초) 초과 문제 해결
+
+  **Bug-3: LangGraph GraphRecursionError (31f9fb9)**
+  - `image_processor_node` 반환값에 `task_type: "analyze"` 추가
+  - LangGraph Send()는 그래프 전역 상태를 업데이트하지 않으므로 노드 반환값에 task_type 포함 필수
+  - 재귀 한도 25 → 50으로 증가 (안전망)
+
+  **Bug-4: 무증상 HTTP 오류 (31f9fb9)**
+  - `src/hooks/use-tutor-stream.ts`에 `response.ok` 검증 추가
+  - HTTP 오류 응답을 사용자에게 명확히 표시
+
 ## [1.1.1] - 2026-02-23
 
 ### Added

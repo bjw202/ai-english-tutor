@@ -54,10 +54,14 @@ AI 기반 한국어 교육 중심 영어 학습 튜터 웹 애플리케이션입
 ### 3. 이미지 분석 (Image Analysis)
 카메라로 촬영한 영어 텍스트 이미지를 업로드하여 텍스트 분석과 동일한 한국어 교육 학습 자료를 생성합니다.
 
-- LLM Vision API를 통한 OCR (광학 문자 인식)
+- **OpenAI Vision API** (gpt-4o-mini)를 통한 OCR (광학 문자 인식)
 - 이미지 내 영어 텍스트 자동 인식
 - Tesseract 등 추가 OCR 도구 불필요
 - 인쇄본, 필기본, 교과서 페이지 지원
+- **처리 시간**: 25-35초 (SSE 하트비트로 연결 유지)
+- **구현 특이사항**: Vercel maxDuration=60 필수, LangGraph TutorState에 image_data/mime_type 필드 필수
+
+배포 중 발견된 4가지 버그 수정 이력: SPEC-IMAGE-001 참조
 
 ### 4. 이해도 단계별 설명 (5-Level Explanation System)
 통합 슬라이더를 통해 5단계의 한국어 교육학적 설명 수준을 선택할 수 있습니다.

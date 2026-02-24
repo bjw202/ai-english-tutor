@@ -70,7 +70,7 @@ ai-english-tutor/
 - **슬래시 읽기 훈련**: 영어 구조를 시각화하는 슬래시 직독직해로 읽기 능력 개발
 - **구조 중심 문법**: 한국어 비교 분석을 포함한 영어 구조 이해 중심 설명
 - **어원 네트워크 어휘**: PIE 어근부터 현재 의미까지의 발전 과정을 통한 깊이 있는 어휘 학습
-- **이미지 분석**: 교과서 이미지 업로드 후 OCR 기반 한국어 교육 분석
+- **이미지 분석**: 교과서/문제지 사진 업로드 후 OpenAI Vision OCR 기반 한국어 교육 분석 (Vercel SSE 하트비트로 타임아웃 방지)
 - **이해도 조절**: Level 1-5 슬라이더로 한국 교육학적 설명 깊이 조절
 - **실시간 스트리밍**: SSE 기반 토큰 단위 스트리밍 (ChatGPT 스타일 타이핑 효과)
 
@@ -200,6 +200,16 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 | `vocabulary_chunk` | `{"words": [...]}` | 어휘 분석 결과 (일괄) |
 | `done` | `{"session_id": "...", "status": "complete"}` | 전체 완료 |
 | `error` | `{"message": "...", "code": "..."}` | 오류 |
+
+## 이미지 분석 기능 배포 참고사항
+
+이미지 분석은 OpenAI Vision API를 사용하며 처리 시간이 25-35초 소요될 수 있습니다.
+
+- **Vercel 설정**: `maxDuration=60` 필수 (기본값 10초로는 타임아웃 발생)
+- **SSE 하트비트**: 5초 간격으로 연결 유지 (`": comment\n\n"` 형식)
+- **LangGraph 상태**: `TutorState`에 `image_data`, `mime_type` 필드 반드시 포함
+
+자세한 배포 이슈 및 학습 내용: `.moai/learning/IMAGE-ANALYSIS-DEPLOYMENT-LEARNINGS.md`
 
 ## 품질 지표
 
