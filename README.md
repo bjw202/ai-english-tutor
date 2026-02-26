@@ -195,13 +195,16 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 |--------|----------|------|
 | `reading_token` | `{"token": "..."}` | 독해 분석 토큰 (실시간) |
 | `grammar_token` | `{"token": "..."}` | 문법 분석 토큰 (실시간) |
+| `vocabulary_token` | `{"token": "..."}` | 어휘 분석 토큰 (실시간) |
 | `reading_done` | `{"section": "reading"}` | 독해 섹션 완료 |
 | `grammar_done` | `{"section": "grammar"}` | 문법 섹션 완료 |
-| `vocabulary_chunk` | `{"words": [...]}` | 어휘 분석 결과 (일괄) |
+| `vocabulary_chunk` | `{"words": [...]}` | 어휘 분석 결과 (구조화 데이터) |
 | `vocabulary_done` | `{"section": "vocabulary"}` | 어휘 섹션 완료 |
-| `vocabulary_error` | `{"message": "...", "code": "vocabulary_error"}` | 어휘 분석 오류 |
+| `reading_error` | `{"message": "...", "code": "reading_error"}` | 독해 분석 오류 (격리) |
+| `grammar_error` | `{"message": "...", "code": "grammar_error"}` | 문법 분석 오류 (격리) |
+| `vocabulary_error` | `{"message": "...", "code": "vocabulary_error"}` | 어휘 분석 오류 (격리) |
 | `done` | `{"session_id": "...", "status": "complete"}` | 전체 완료 |
-| `error` | `{"message": "...", "code": "..."}` | 오류 |
+| `error` | `{"message": "...", "code": "..."}` | 전역 오류 |
 
 ## 이미지 분석 기능 배포 참고사항
 
@@ -225,8 +228,8 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 
 ### 백엔드
 
-- **테스트**: 238개 통과
-- **커버리지**: 94% (Lines)
+- **테스트**: 252개 통과
+- **커버리지**: 92% (Lines)
 - **Ruff**: 0 에러
 - **LLM 모델 통합**: 모든 에이전트 gpt-4o-mini 통일 (비용 95% 절감)
 
