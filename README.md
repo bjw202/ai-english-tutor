@@ -198,6 +198,8 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 | `reading_done` | `{"section": "reading"}` | 독해 섹션 완료 |
 | `grammar_done` | `{"section": "grammar"}` | 문법 섹션 완료 |
 | `vocabulary_chunk` | `{"words": [...]}` | 어휘 분석 결과 (일괄) |
+| `vocabulary_done` | `{"section": "vocabulary"}` | 어휘 섹션 완료 |
+| `vocabulary_error` | `{"message": "...", "code": "vocabulary_error"}` | 어휘 분석 오류 |
 | `done` | `{"session_id": "...", "status": "complete"}` | 전체 완료 |
 | `error` | `{"message": "...", "code": "..."}` | 오류 |
 
@@ -215,7 +217,7 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 
 ### 프론트엔드
 
-- **테스트**: 103개 통과 (스트리밍 테스트 12개 포함)
+- **테스트**: 107개 통과 (스트리밍 테스트 14개 포함)
 - **커버리지**: 91.98% (Lines), 86.5% (Branches)
 - **TypeScript**: strict mode, 0 에러
 - **ESLint**: 0 에러
@@ -223,8 +225,8 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 
 ### 백엔드
 
-- **테스트**: 235개 통과
-- **커버리지**: 97% (Lines)
+- **테스트**: 238개 통과
+- **커버리지**: 94% (Lines)
 - **Ruff**: 0 에러
 - **LLM 모델 통합**: 모든 에이전트 gpt-4o-mini 통일 (비용 95% 절감)
 
