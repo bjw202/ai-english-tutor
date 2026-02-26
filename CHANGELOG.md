@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Switch Vercel API route to Edge Runtime to eliminate 60-second streaming timeout that caused vocabulary content to appear cut-off in production
+
 ## [1.1.5] - 2026-02-26
 
 ### Fixed
