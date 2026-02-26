@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-02-26
+
+### Fixed
+- **Vocabulary SSE Streaming (Production Hotfix)** - LangGraph 0.3.34와 uvloop 호환성 문제 해결
+
+  **Architecture Refactor: LangGraph에서 Vocabulary 분리 (783bf37)**
+  - LangGraph Send()의 FuturesDict 약참조 GC 버그로 인한 에러 발생
+  - vocabulary_node를 parallel Send() 대신 asyncio.Task로 실행
+  - SSE 스트리밍이 안정적으로 작동하며 대문장(1000+ 단어) 처리 가능
+
+  **uvloop 제거로 배포 안정성 개선 (9c14d26, bff069a)**
+  - uvloop과 LangGraph의 callback 처리 충돌로 장문 처리 시 크래시 발생
+  - uvicorn[standard] → uvicorn으로 변경 (uvloop 의존성 제거)
+  - Procfile과 nixpacks.toml에 `--loop asyncio` 플래그 추가
+  - Railway 배포 환경에서 안정적인 SSE 스트리밍 확보
+
 ## [1.1.2] - 2026-02-24
 
 ### Fixed
