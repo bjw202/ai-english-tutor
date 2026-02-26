@@ -9,7 +9,7 @@
 | **프레임워크** | FastAPI | 0.115+ | REST API 서버 |
 | **런타임** | Python | 3.13+ | 서버 사이드 언어 |
 | **서버** | Uvicorn | 0.34+ | ASGI 웹 서버 |
-| **AI 오케스트레이션** | LangGraph | 0.3+ | 멀티 에이전트 워크플로우 |
+| **AI 오케스트레이션** | LangGraph | 0.3+ | Chat 플로우, Image OCR 처리에만 사용. Analyze 플로우는 asyncio.gather + asyncio.Queue로 직접 관리 (SPEC-VOCAB-003) |
 | **LLM 인테그레이션** | langchain-openai | 0.3+ | OpenAI API 통합 |
 | **LLM 인테그레이션** | langchain-anthropic | 0.3+ | Anthropic API 통합 |
 | **데이터 검증** | Pydantic | 2.10+ | 요청/응답 모델 |
@@ -28,6 +28,34 @@
 | **UI 컴포넌트** | shadcn/ui | latest | 재사용 가능 컴포넌트 |
 | **패키지 관리** | pnpm | 10.x | 효율적 패키지 관리 |
 | **테스트** | Vitest | 3.x | 빠른 단위 테스트 |
+
+### Analyze 플로우 아키텍처 (SPEC-VOCAB-003)
+
+**이전 구조 문제점:**
+- Vocabulary: LangGraph 외부 → `astream()` + `asyncio.Queue` (토큰 스트리밍)
+- Reading/Grammar: LangGraph 내부 → `ainvoke()` (배치 모드)
+- 구조적 불일치 및 안정성 위험 (reading/grammar가 느릴 경우 FuturesDict GC 버그 발생 가능)
+
+**새로운 구조:**
+```
+supervisor_node 직접 호출 (await, LangGraph 제외)
+         ↓
+asyncio.gather(
+  reading_task (astream + Queue),
+  grammar_task (astream + Queue),
+  vocabulary_task (astream + Queue)
+)
+         ↓
+_merge_agent_streams (asyncio.wait FIRST_COMPLETED)
+         ↓
+SSE 토큰 스트림
+```
+
+**특징:**
+- 모든 3개 에이전트가 동일 패턴: `astream()` + `asyncio.Queue` + None sentinel
+- 개별 에이전트 실패 격리 (`reading_error`, `grammar_error` 이벤트)
+- `asyncio.wait(FIRST_COMPLETED)`로 공정한 토큰 머징
+- LangGraph는 chat/image_process 플로우에만 사용
 
 ### LLM API 서비스
 

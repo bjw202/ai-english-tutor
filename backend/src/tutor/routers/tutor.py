@@ -15,6 +15,9 @@ from typing import cast
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 
+from tutor.agents.grammar import grammar_node
+from tutor.agents.reading import reading_node
+from tutor.agents.supervisor import supervisor_node
 from tutor.agents.vocabulary import vocabulary_node
 from tutor.graph import graph
 from tutor.schemas import AnalyzeImageRequest, AnalyzeRequest, ChatRequest
@@ -23,7 +26,9 @@ from tutor.services.image import validate_image
 from tutor.services.streaming import (
     format_done_event,
     format_error_event,
+    format_grammar_error,
     format_grammar_token,
+    format_reading_error,
     format_reading_token,
     format_section_done,
     format_vocabulary_chunk,
@@ -41,123 +46,230 @@ _HEARTBEAT_INTERVAL_SECONDS = 5
 _SSE_HEARTBEAT_COMMENT = ": heartbeat\n\n"
 
 
-async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGenerator[str]:
-    """Stream LangGraph events as SSE tokens.
+async def _merge_agent_streams(
+    reading_queue: asyncio.Queue,
+    grammar_queue: asyncio.Queue,
+    vocab_queue: asyncio.Queue,
+) -> AsyncGenerator[str, None]:
+    """Merge 3 agent token queues into a single SSE stream using FIRST_COMPLETED.
 
-    Reading and grammar are streamed via LangGraph's astream_events.
-    Vocabulary runs as a concurrent asyncio.Task outside the graph to avoid
-    the LangGraph 0.3.34 FuturesDict weakref GC bug: when vocabulary (the
-    slowest parallel node) completes after reading and grammar, the FuturesDict
-    callback is already GC'd, causing TypeError: 'NoneType' object is not callable.
-
-    Flow:
-    1. Capture supervisor output to get supervisor_analysis for vocabulary context
-    2. Start vocabulary_task as soon as supervisor completes
-    3. Stream reading/grammar tokens from graph events
-    4. After graph stream ends, await vocabulary_task with heartbeats
-    5. Emit vocabulary_chunk + section_done("vocabulary") + done
+    Each agent delivers tokens via its queue. A None sentinel signals completion.
+    Uses asyncio.wait(FIRST_COMPLETED) to interleave tokens in arrival order.
 
     Args:
-        input_state: The initial state dict to pass to the graph
-        session_id: The session ID to include in the done event
+        reading_queue: Queue for reading agent tokens
+        grammar_queue: Queue for grammar agent tokens
+        vocab_queue: Queue for vocabulary agent tokens
 
     Yields:
-        Formatted SSE event strings (or SSE comment heartbeats)
+        Formatted SSE event strings (reading_token, grammar_token, vocabulary_token)
+        or SSE heartbeat comments on timeout.
     """
-    vocabulary_task: asyncio.Task | None = None
-    vocab_queue: asyncio.Queue | None = None
+    queues = {
+        "reading": reading_queue,
+        "grammar": grammar_queue,
+        "vocabulary": vocab_queue,
+    }
+    formatters = {
+        "reading": format_reading_token,
+        "grammar": format_grammar_token,
+        "vocabulary": format_vocabulary_token,
+    }
+    active = set(queues.keys())
+
+    while active:
+        get_tasks = {
+            name: asyncio.create_task(queues[name].get())
+            for name in active
+        }
+
+        done, pending = await asyncio.wait(
+            list(get_tasks.values()),
+            timeout=_HEARTBEAT_INTERVAL_SECONDS,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        if not done:
+            # Timeout: no tokens arrived -> emit heartbeat
+            yield _SSE_HEARTBEAT_COMMENT
+            for t in pending:
+                t.cancel()
+            continue
+
+        # Map task back to agent name
+        task_to_name = {v: k for k, v in get_tasks.items()}
+        for task in done:
+            agent_name = task_to_name[task]
+            try:
+                token = task.result()
+            except Exception:
+                # Task failed - treat as sentinel
+                active.discard(agent_name)
+                continue
+            if token is None:
+                active.discard(agent_name)
+            else:
+                yield formatters[agent_name](token)
+
+        for t in pending:
+            t.cancel()
+
+
+async def _stream_analyze_events(
+    input_state: dict,
+    session_id: str,
+) -> AsyncGenerator[str, None]:
+    """Stream analyze flow events using direct asyncio.Task parallel execution.
+
+    Bypasses LangGraph for the analyze flow. Calls supervisor directly,
+    then runs reading, grammar, vocabulary as concurrent asyncio.Tasks,
+    each streaming tokens via their own asyncio.Queue.
+
+    Args:
+        input_state: The state dict with input_text, level, supervisor_analysis (optional), etc.
+        session_id: Session ID for the done event
+
+    Yields:
+        Formatted SSE event strings
+    """
+    try:
+        # Step 1: Supervisor direct call (skip if supervisor_analysis already in state)
+        supervisor_analysis = input_state.get("supervisor_analysis")
+        if supervisor_analysis is None:
+            supervisor_result = await supervisor_node(cast(TutorState, input_state))
+            supervisor_analysis = supervisor_result.get("supervisor_analysis")
+
+        agent_state = {**input_state, "supervisor_analysis": supervisor_analysis}
+
+        # Step 2: Create per-agent queues
+        reading_queue: asyncio.Queue = asyncio.Queue()
+        grammar_queue: asyncio.Queue = asyncio.Queue()
+        vocab_queue: asyncio.Queue = asyncio.Queue()
+
+        # Step 3: Launch 3 agent tasks concurrently
+        reading_task = asyncio.create_task(
+            reading_node(cast(TutorState, agent_state), token_queue=reading_queue)
+        )
+        grammar_task = asyncio.create_task(
+            grammar_node(cast(TutorState, agent_state), token_queue=grammar_queue)
+        )
+        vocab_task = asyncio.create_task(
+            vocabulary_node(cast(TutorState, agent_state), token_queue=vocab_queue)
+        )
+
+        # Step 4: Merge token streams from all 3 queues
+        async for sse_event in _merge_agent_streams(reading_queue, grammar_queue, vocab_queue):
+            yield sse_event
+
+        # Step 5: Await all results (exceptions captured, not raised)
+        results = await asyncio.gather(
+            reading_task, grammar_task, vocab_task, return_exceptions=True
+        )
+
+        # Step 6: Emit section done + error events
+        # Reading result
+        if isinstance(results[0], Exception):
+            yield format_reading_error(str(results[0]))
+        yield format_section_done("reading")
+
+        # Grammar result
+        if isinstance(results[1], Exception):
+            yield format_grammar_error(str(results[1]))
+        yield format_section_done("grammar")
+
+        # Vocabulary result
+        if isinstance(results[2], Exception):
+            yield format_vocabulary_error(str(results[2]))
+        else:
+            vocab_result = results[2]
+            if isinstance(vocab_result, dict):
+                vocab_error = vocab_result.get("vocabulary_error")
+                vocabulary_result = vocab_result.get("vocabulary_result")
+                if vocab_error:
+                    yield format_vocabulary_error(vocab_error)
+                elif vocabulary_result and hasattr(vocabulary_result, "model_dump"):
+                    data = vocabulary_result.model_dump()
+                    if data.get("words"):
+                        yield format_vocabulary_chunk(data)
+        yield format_section_done("vocabulary")
+
+        yield format_done_event(session_id)
+
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.error(f"Error in _stream_analyze_events: {e}")
+        yield format_error_event(str(e), "processing_error")
+
+
+async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGenerator[str, None]:
+    """Stream graph events as SSE tokens.
+
+    For analyze task_type: Uses direct asyncio.Task parallel execution (SPEC-VOCAB-003).
+    Reading, grammar, and vocabulary agents are run as concurrent asyncio.Tasks,
+    each streaming tokens via their own asyncio.Queue.
+
+    For image_process task_type: Streams LangGraph events for OCR+supervisor,
+    then delegates to _stream_analyze_events with captured state.
+
+    Args:
+        input_state: The initial state dict
+        session_id: The session ID for the done event
+
+    Yields:
+        Formatted SSE event strings
+    """
+    task_type = input_state.get("task_type", "analyze")
+
+    if task_type == "analyze":
+        # Direct asyncio.Task execution, no LangGraph
+        async for event in _stream_analyze_events(input_state, session_id):
+            yield event
+        return
+
+    # image_process: run image_processor + supervisor via LangGraph
+    # then delegate to _stream_analyze_events with captured state
+    extracted_text = ""
+    supervisor_analysis = None
 
     try:
         async for event in _stream_with_heartbeat(input_state):
             if event is None:
-                # No graph event within the heartbeat interval; send keep-alive
                 yield _SSE_HEARTBEAT_COMMENT
                 continue
 
             kind = event["event"]
 
-            # Start vocabulary task as soon as supervisor analysis is available
-            if kind == "on_chain_end" and event.get("name") == "supervisor" and vocabulary_task is None:
+            # Capture extracted text from image_processor
+            if kind == "on_chain_end" and event.get("name") == "image_processor":
                 output = event.get("data", {}).get("output", {})
-                supervisor_analysis = output.get("supervisor_analysis")
-                vocab_state = {**input_state, "supervisor_analysis": supervisor_analysis}
-                vocab_queue = asyncio.Queue()
-                vocabulary_task = asyncio.create_task(
-                    vocabulary_node(cast(TutorState, vocab_state), token_queue=vocab_queue)
-                )
+                extracted_text = output.get("extracted_text", "")
 
-            # Token-level streaming for reading and grammar
-            elif kind == "on_chat_model_stream":
-                node = event.get("metadata", {}).get("langgraph_node", "")
-                chunk = event["data"].get("chunk")
-                if chunk:
-                    token = chunk.content if hasattr(chunk, "content") else str(chunk)
-                    if token:  # Skip empty tokens
-                        if node == "reading":
-                            yield format_reading_token(token)
-                        elif node == "grammar":
-                            yield format_grammar_token(token)
+            # Capture supervisor analysis (may fire twice; take the latest)
+            if kind == "on_chain_end" and event.get("name") == "supervisor":
+                output = event.get("data", {}).get("output", {})
+                analysis = output.get("supervisor_analysis")
+                if analysis is not None:
+                    supervisor_analysis = analysis
 
-            # Section completion events for reading and grammar only
-            elif kind == "on_chain_end":
-                node_name = event.get("name", "")
-                if node_name == "reading":
-                    yield format_section_done("reading")
-                elif node_name == "grammar":
-                    yield format_section_done("grammar")
+        # Graph stream ended. Now stream the analyze phase.
+        if not extracted_text:
+            # No text was extracted from the image - emit done event only
+            yield format_done_event(session_id)
+            return
 
-        # Fallback: start vocabulary without supervisor context if supervisor event was missed
-        if vocabulary_task is None:
-            vocab_queue = asyncio.Queue()
-            vocabulary_task = asyncio.create_task(
-                vocabulary_node(cast(TutorState, input_state), token_queue=vocab_queue)
-            )
-
-        # Stream vocabulary tokens from Queue until sentinel None is received
-        assert vocab_queue is not None
-        while True:
-            try:
-                token = await asyncio.wait_for(
-                    vocab_queue.get(), timeout=_HEARTBEAT_INTERVAL_SECONDS
-                )
-                if token is None:  # sentinel: streaming complete
-                    break
-                yield format_vocabulary_token(token)
-            except TimeoutError:
-                # No token arrived within heartbeat interval
-                if vocabulary_task.done():
-                    break
-                yield _SSE_HEARTBEAT_COMMENT
-
-        # Emit vocabulary result
-        try:
-            vocab_result = await vocabulary_task
-            vocab_error = vocab_result.get("vocabulary_error")
-            vocabulary_result = vocab_result.get("vocabulary_result")
-            if vocab_error:
-                yield format_vocabulary_error(vocab_error)
-            elif vocabulary_result:
-                if hasattr(vocabulary_result, "model_dump"):
-                    data = vocabulary_result.model_dump()
-                elif isinstance(vocabulary_result, dict):
-                    data = vocabulary_result
-                else:
-                    data = None
-                if data and data.get("words"):
-                    yield format_vocabulary_chunk(data)
-        except Exception as e:
-            logger.error(f"Vocabulary task error: {e}")
-            yield format_vocabulary_error(str(e))
-
-        yield format_section_done("vocabulary")
-        yield format_done_event(session_id)
+        analyze_state = {
+            **input_state,
+            "input_text": extracted_text,
+            "task_type": "analyze",
+            "supervisor_analysis": supervisor_analysis,
+        }
+        async for event in _stream_analyze_events(analyze_state, session_id):
+            yield event
 
     except asyncio.CancelledError:
-        if vocabulary_task and not vocabulary_task.done():
-            vocabulary_task.cancel()
+        raise
     except Exception as e:
-        if vocabulary_task and not vocabulary_task.done():
-            vocabulary_task.cancel()
         yield format_error_event(str(e), "processing_error")
 
 
@@ -240,8 +352,9 @@ async def health() -> dict:
 async def analyze(request: AnalyzeRequest) -> StreamingResponse:
     """Analyze text and stream results via Server-Sent Events.
 
-    Executes the LangGraph pipeline with reading, grammar, and vocabulary
-    agents running in parallel. Results are streamed as SSE events.
+    Executes reading, grammar, and vocabulary agents as concurrent asyncio.Tasks
+    (SPEC-VOCAB-003), bypassing LangGraph for the analyze flow. Results are
+    streamed as SSE events in real-time as each agent produces tokens.
 
     Args:
         request: AnalyzeRequest containing text and proficiency level
@@ -250,11 +363,18 @@ async def analyze(request: AnalyzeRequest) -> StreamingResponse:
         StreamingResponse with SSE events
 
     SSE Events:
-        - reading_chunk: Reading comprehension analysis
-        - grammar_chunk: Grammar analysis results
-        - vocabulary_chunk: Vocabulary analysis results
+        - reading_token: Individual token from reading agent LLM stream
+        - grammar_token: Individual token from grammar agent LLM stream
+        - vocabulary_token: Individual token from vocabulary agent LLM stream
+        - reading_done: Reading section complete
+        - grammar_done: Grammar section complete
+        - vocabulary_done: Vocabulary section complete
+        - vocabulary_chunk: Final vocabulary structured data
+        - reading_error: Error from reading agent (if any)
+        - grammar_error: Error from grammar agent (if any)
+        - vocabulary_error: Error from vocabulary agent (if any)
         - done: Session completion with session_id
-        - error: Error information if processing fails
+        - error: Critical error information if processing fails
 
     Example:
         >>> POST /api/v1/tutor/analyze

@@ -3,6 +3,11 @@ LangGraph workflow graph for AI English Tutor.
 
 Defines the multi-agent workflow graph using LangGraph's StateGraph
 with Send() API for parallel agent dispatch.
+
+SPEC-VOCAB-003: Reading, grammar, and vocabulary agents are now handled
+as direct asyncio.Tasks in the streaming router. The analyze flow returns
+an empty list from route_by_task, and LangGraph only handles image_process
+and chat task types.
 """
 
 from __future__ import annotations
@@ -12,9 +17,7 @@ from langgraph.graph import StateGraph
 from langgraph.types import Send
 
 from tutor.agents.aggregator import aggregator_node
-from tutor.agents.grammar import grammar_node
 from tutor.agents.image_processor import image_processor_node
-from tutor.agents.reading import reading_node
 from tutor.agents.supervisor import supervisor_node
 from tutor.state import TutorState
 
@@ -53,19 +56,24 @@ def route_by_task(state: TutorState) -> list[Send]:
     This routing function uses LangGraph's Send() API to dispatch
     agents either in parallel or sequentially based on the task_type.
 
+    SPEC-VOCAB-003: The analyze flow now returns an empty list because
+    reading, grammar, and vocabulary agents are handled as concurrent
+    asyncio.Tasks in the streaming router (_stream_analyze_events).
+    LangGraph is only used for image_process and chat task types.
+
     Args:
         state: Current TutorState containing task_type field
 
     Returns:
-        List of Send objects for parallel dispatch:
-        - analyze: 3 Send objects (reading, grammar, vocabulary) in parallel
+        List of Send objects for dispatch:
+        - analyze: Empty list (agents handled as asyncio.Tasks in router)
         - image_process: 1 Send object (image_processor)
         - chat: 1 Send object (chat)
         - unknown: Empty list
 
     Examples:
         >>> route_by_task({"task_type": "analyze", ...})
-        [Send('reading', {...}), Send('grammar', {...}), Send('vocabulary', {...})]
+        []
 
         >>> route_by_task({"task_type": "image_process", ...})
         [Send('image_processor', {...})]
@@ -73,15 +81,9 @@ def route_by_task(state: TutorState) -> list[Send]:
     task_type = state.get("task_type", "analyze")
 
     if task_type == "analyze":
-        # Dispatch reading and grammar in parallel via LangGraph.
-        # Vocabulary is handled as a direct asyncio.Task in the streaming router
-        # to avoid the LangGraph 0.3.34 FuturesDict weakref GC bug that causes
-        # TypeError: 'NoneType' object is not callable when the slower vocabulary
-        # node completes after reading and grammar have already finished.
-        return [
-            Send("reading", state),
-            Send("grammar", state),
-        ]
+        # Reading, grammar, vocabulary are handled as direct asyncio.Tasks
+        # in the streaming router (SPEC-VOCAB-003). No LangGraph dispatch.
+        return []
     elif task_type == "image_process":
         # Route to image processor first
         return [Send("image_processor", state)]
@@ -103,21 +105,23 @@ def create_graph():
           ↓
         [supervisor]  ← task_type 판단
           ↓ (조건부 엣지 via route_by_task)
-          ├─ "analyze" → Send(3 튜터) [병렬 실행]
+          ├─ "analyze" → [] (빈 리스트, asyncio.Tasks로 처리됨)
           ├─ "image_process" → [image_processor] → [aggregator]
           └─ "chat" → [chat]
           ↓
-        [aggregator]  ← 병렬 결과 수집
+        [aggregator]  ← 결과 수집
           ↓
         [END]
 
     Nodes:
         - supervisor: Entry point that determines routing based on task_type
-        - reading: Reading comprehension analysis (parallel for analyze)
-        - grammar: Grammar analysis (parallel for analyze)
-        - vocabulary: Vocabulary analysis (parallel for analyze)
         - image_processor: OCR and text extraction from images
         - aggregator: Combines results from all agents into unified response
+
+    Note (SPEC-VOCAB-003):
+        Reading, grammar, and vocabulary nodes are no longer part of the
+        LangGraph graph. They are run as concurrent asyncio.Tasks in the
+        streaming router (_stream_analyze_events in tutor.py).
 
     Returns:
         Compiled StateGraph ready for invocation or streaming
@@ -129,15 +133,15 @@ def create_graph():
         ...     "level": 3,
         ...     "session_id": "abc-123",
         ...     "input_text": "Hello world",
-        ...     "task_type": "analyze"
+        ...     "task_type": "image_process",
+        ...     "image_data": "...",
         ... })
     """
     workflow = StateGraph(TutorState)
 
-    # Add all nodes to the graph
+    # Add nodes to the graph
+    # Note: reading, grammar, vocabulary are NOT added here (SPEC-VOCAB-003)
     workflow.add_node("supervisor", supervisor_node)
-    workflow.add_node("reading", reading_node)
-    workflow.add_node("grammar", grammar_node)
     workflow.add_node("image_processor", image_processor_node)
     workflow.add_node("aggregator", aggregator_node)
 
@@ -146,13 +150,7 @@ def create_graph():
 
     # Add conditional edges from supervisor based on task_type
     # The route_by_task function returns a list of Send objects
-    # that will be dispatched in parallel
     workflow.add_conditional_edges("supervisor", route_by_task)
-
-    # Reading and grammar nodes lead to aggregator for result collection.
-    # Vocabulary is handled as a direct asyncio.Task in the streaming router.
-    workflow.add_edge("reading", "aggregator")
-    workflow.add_edge("grammar", "aggregator")
 
     # After image processing, conditionally route to analysis agents or aggregator
     workflow.add_conditional_edges("image_processor", route_after_image)

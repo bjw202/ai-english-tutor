@@ -80,7 +80,7 @@ class TestPyprojectToml:
 
         required = {
             "fastapi",
-            "uvicorn[standard]",
+            "uvicorn",
             "pydantic",
             "pydantic-settings",
             "langgraph",

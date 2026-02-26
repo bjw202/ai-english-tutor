@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-02-26
+
+### Changed
+
+**Unified Streaming Architecture (SPEC-VOCAB-003)** - Reading/Grammar 에이전트의 배치 모드 → 스트리밍 모드 전환
+
+**배경:**
+SPEC-VOCAB-001/002에서 vocabulary 에이전트를 LangGraph 외부로 분리하고 `astream()` + `asyncio.Queue` 패턴으로 전환했습니다. 그러나 reading/grammar는 여전히 LangGraph 내부에서 `ainvoke()` (배치 모드)를 사용하고 있었습니다. 이로 인해 구조가 불안정했습니다. reading이나 grammar가 가장 느린 에이전트가 되면, vocabulary와 동일한 FuturesDict GC 버그가 발생할 수 있는 위험이 있었습니다.
+
+**해결:**
+- **Reading/Grammar 에이전트**: `ainvoke()` → `astream()` + `asyncio.Queue` 패턴으로 전환 (vocabulary와 동일)
+- **Tutor 라우터**: 새로운 `_stream_analyze_events()` 함수 추가 (supervisor 직접 호출 → asyncio.gather 병렬 실행)
+- **Token 머징**: `_merge_agent_streams()` 함수로 3개 Queue를 `asyncio.wait(FIRST_COMPLETED)` 기반으로 머지
+- **LangGraph 부분 제거**: analyze 플로우에서 reading/grammar의 `Send()` 호출 제거 (chat/image_process 유지)
+
+**새로운 SSE 이벤트:**
+- `reading_error`: Reading 에이전트 격리 오류
+- `grammar_error`: Grammar 에이전트 격리 오류
+
+**결과:**
+- 모든 3개 에이전트가 토큰 단위 실시간 스트리밍 가능
+- 개별 에이전트 실패 격리 (다른 에이전트는 계속 작동)
+- 일관된 아키텍처: 모든 에이전트 동일 패턴
+- 252개 테스트 통과, 92% 커버리지
+
 ## [1.1.3] - 2026-02-26
 
 ### Fixed

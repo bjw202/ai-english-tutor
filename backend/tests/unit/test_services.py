@@ -12,9 +12,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from tutor.config import Settings
 from tutor.services.image import (
-    ImageValidationError,
     preprocess_image_for_llm,
     validate_image,
 )
@@ -23,7 +21,9 @@ from tutor.services.streaming import (
     format_done_event,
     format_error_event,
     format_grammar_chunk,
+    format_grammar_error,
     format_reading_chunk,
+    format_reading_error,
     format_sse_event,
     format_vocabulary_chunk,
     format_vocabulary_error,
@@ -70,6 +70,7 @@ class TestSessionManager:
         assert result2 is True
 
         session = manager.get(session_id)
+        assert session is not None
         assert len(session["messages"]) == 2
         assert session["messages"][0] == {"role": "user", "content": "Hello, how are you?"}
         assert session["messages"][1] == {"role": "assistant", "content": "I'm doing well, thank you!"}
@@ -137,9 +138,6 @@ class TestSessionManager:
 
     def test_global_session_manager_instance(self):
         """Test that the global session_manager instance uses settings."""
-        # Arrange: Get settings instance
-        settings = Settings()
-
         # Assert: Verify global instance exists
         # Note: session_manager is a proxy, so we check it behaves like SessionManager
         assert session_manager is not None
@@ -303,6 +301,30 @@ class TestSSEFormatting:
         result = format_vocabulary_token(token)
         expected = 'event: vocabulary_token\ndata: {"token": "test"}\n\n'
         assert result == expected
+
+    def test_format_reading_error(self):
+        """Test that reading error events are formatted correctly as SSE events."""
+        message = "test error"
+        result = format_reading_error(message)
+        assert "reading_error" in result
+        assert "test error" in result
+        lines = result.strip().split("\n")
+        data_line = lines[1].replace("data: ", "")
+        parsed = json.loads(data_line)
+        assert parsed["message"] == message
+        assert parsed["code"] == "reading_error"
+
+    def test_format_grammar_error(self):
+        """Test that grammar error events are formatted correctly as SSE events."""
+        message = "test error"
+        result = format_grammar_error(message)
+        assert "grammar_error" in result
+        assert "test error" in result
+        lines = result.strip().split("\n")
+        data_line = lines[1].replace("data: ", "")
+        parsed = json.loads(data_line)
+        assert parsed["message"] == message
+        assert parsed["code"] == "grammar_error"
 
 
 class TestImageValidation:

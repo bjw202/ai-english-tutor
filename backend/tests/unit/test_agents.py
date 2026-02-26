@@ -215,12 +215,16 @@ class TestReadingAgent:
         """
         from tutor.agents.reading import reading_node
 
-        # Mock raw LLM response (not structured output)
-        mock_response = MagicMock()
-        mock_response.content = "## 슬래시 직독\n\nThe quick brown fox / jumps / over the lazy dog.\n\n..."
+        # Mock astream chunk response
+        mock_chunk = MagicMock()
+        mock_chunk.content = "## 슬래시 직독\n\nThe quick brown fox / jumps / over the lazy dog.\n\n..."
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
 
         with patch("tutor.agents.reading.get_llm", return_value=mock_llm), \
              patch("tutor.agents.reading.render_prompt", return_value="Test prompt"):
@@ -242,11 +246,15 @@ class TestReadingAgent:
         """
         from tutor.agents.reading import reading_node
 
-        mock_response = MagicMock()
-        mock_response.content = "Korean Markdown reading content"
+        mock_chunk = MagicMock()
+        mock_chunk.content = "Korean Markdown reading content"
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
 
         mock_settings_obj = MagicMock()
         mock_settings_obj.READING_MODEL = "gpt-4o-mini"
@@ -266,22 +274,28 @@ class TestReadingAgent:
         """
         GIVEN a reading analysis request
         WHEN reading_node is called
-        THEN it should use raw llm.ainvoke() (not with_structured_output)
+        THEN it should use raw llm.astream() (not with_structured_output)
         """
         from tutor.agents.reading import reading_node
 
-        mock_response = MagicMock()
-        mock_response.content = "Reading content"
+        mock_chunk = MagicMock()
+        mock_chunk.content = "Reading content"
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+        astream_mock = MagicMock()
+
+        async def mock_astream_gen(_prompt):
+            yield mock_chunk
+
+        astream_mock.side_effect = mock_astream_gen
+        mock_llm.astream = astream_mock
 
         with patch("tutor.agents.reading.get_llm", return_value=mock_llm), \
              patch("tutor.agents.reading.render_prompt", return_value="Test prompt"):
             await reading_node(reading_state)
 
-        # Should use ainvoke directly, not with_structured_output
-        mock_llm.ainvoke.assert_called_once()
+        # Should use astream directly, not with_structured_output
+        astream_mock.assert_called_once()
         mock_llm.with_structured_output.assert_not_called()
 
     @pytest.mark.asyncio
@@ -301,11 +315,15 @@ class TestReadingAgent:
             focus_summary=["reading", "grammar"],
         )
 
-        mock_response = MagicMock()
-        mock_response.content = "Reading content"
+        mock_chunk = MagicMock()
+        mock_chunk.content = "Reading content"
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
 
         captured_prompt = {}
 
@@ -334,11 +352,15 @@ class TestReadingAgent:
 
         reading_state["level"] = 1
 
-        mock_response = MagicMock()
-        mock_response.content = "Reading content"
+        mock_chunk = MagicMock()
+        mock_chunk.content = "Reading content"
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
 
         with patch("tutor.agents.reading.get_llm", return_value=mock_llm), patch(
             "tutor.agents.reading.get_level_instructions", return_value="Beginner level instructions"
@@ -352,7 +374,7 @@ class TestReadingAgent:
         """
         GIVEN a reading agent that encounters an error
         WHEN reading_node is called
-        THEN it should return None for reading_result
+        THEN it should return None for reading_result and set reading_error
         """
         from tutor.agents.reading import reading_node
 
@@ -361,6 +383,82 @@ class TestReadingAgent:
 
         assert "reading_result" in result
         assert result["reading_result"] is None
+        assert "reading_error" in result
+
+    @pytest.mark.asyncio
+    async def test_reading_node_streams_tokens_via_queue(self, reading_state: TutorState) -> None:
+        """reading_node with token_queue should put tokens into queue and end with None sentinel."""
+        import asyncio
+
+        from tutor.agents.reading import reading_node
+
+        mock_chunks = [MagicMock(), MagicMock()]
+        mock_chunks[0].content = "Hello"
+        mock_chunks[1].content = " World"
+
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            for chunk in mock_chunks:
+                yield chunk
+
+        mock_llm.astream = mock_astream
+
+        queue: asyncio.Queue = asyncio.Queue()
+
+        with patch("tutor.agents.reading.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.reading.render_prompt", return_value="Test prompt"):
+            result = await reading_node(reading_state, token_queue=queue)
+
+        received = []
+        while not queue.empty():
+            received.append(queue.get_nowait())
+
+        assert received == ["Hello", " World", None]
+        assert result.get("reading_result") is not None
+
+    @pytest.mark.asyncio
+    async def test_reading_node_backward_compatible_without_queue(self, reading_state: TutorState) -> None:
+        """reading_node without token_queue should work normally."""
+        from tutor.agents.reading import reading_node
+
+        mock_chunk = MagicMock()
+        mock_chunk.content = "Reading content"
+
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
+
+        with patch("tutor.agents.reading.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.reading.render_prompt", return_value="Test prompt"):
+            result = await reading_node(reading_state)  # no token_queue
+
+        assert result.get("reading_result") is not None
+        assert result["reading_result"].content is not None
+
+    @pytest.mark.asyncio
+    async def test_reading_node_sends_sentinel_on_error(self, reading_state: TutorState) -> None:
+        """On error, reading_node should put None sentinel and return reading_error key."""
+        import asyncio
+
+        from tutor.agents.reading import reading_node
+
+        mock_llm = MagicMock()
+        mock_llm.astream.side_effect = Exception("LLM API error")
+
+        queue: asyncio.Queue = asyncio.Queue()
+
+        with patch("tutor.agents.reading.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.reading.render_prompt", return_value="Test prompt"):
+            result = await reading_node(reading_state, token_queue=queue)
+
+        sentinel = queue.get_nowait()
+        assert sentinel is None
+        assert result.get("reading_error") is not None
+        assert result.get("reading_result") is None
 
 
 class TestGrammarAgent:
@@ -388,11 +486,15 @@ class TestGrammarAgent:
         """
         from tutor.agents.grammar import grammar_node
 
-        mock_response = MagicMock()
-        mock_response.content = "## 문법 포인트\n\n과거 진행형 (Past Continuous)..."
+        mock_chunk = MagicMock()
+        mock_chunk.content = "## 문법 포인트\n\n과거 진행형 (Past Continuous)..."
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
 
         with patch("tutor.agents.grammar.get_llm", return_value=mock_llm), \
              patch("tutor.agents.grammar.render_prompt", return_value="Test prompt"):
@@ -412,11 +514,15 @@ class TestGrammarAgent:
         """
         from tutor.agents.grammar import grammar_node
 
-        mock_response = MagicMock()
-        mock_response.content = "Grammar content"
+        mock_chunk = MagicMock()
+        mock_chunk.content = "Grammar content"
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
 
         mock_settings_obj = MagicMock()
         mock_settings_obj.GRAMMAR_MODEL = "gpt-4o-mini"
@@ -434,21 +540,27 @@ class TestGrammarAgent:
         """
         GIVEN a grammar analysis request
         WHEN grammar_node is called
-        THEN it should use raw llm.ainvoke() (not with_structured_output)
+        THEN it should use raw llm.astream() (not with_structured_output)
         """
         from tutor.agents.grammar import grammar_node
 
-        mock_response = MagicMock()
-        mock_response.content = "Grammar content"
+        mock_chunk = MagicMock()
+        mock_chunk.content = "Grammar content"
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+        astream_mock = MagicMock()
+
+        async def mock_astream_gen(_prompt):
+            yield mock_chunk
+
+        astream_mock.side_effect = mock_astream_gen
+        mock_llm.astream = astream_mock
 
         with patch("tutor.agents.grammar.get_llm", return_value=mock_llm), \
              patch("tutor.agents.grammar.render_prompt", return_value="Test prompt"):
             await grammar_node(grammar_state)
 
-        mock_llm.ainvoke.assert_called_once()
+        astream_mock.assert_called_once()
         mock_llm.with_structured_output.assert_not_called()
 
     @pytest.mark.asyncio
@@ -458,18 +570,94 @@ class TestGrammarAgent:
         """
         GIVEN a state with input_text
         WHEN grammar_node encounters an error
-        THEN it should handle the error gracefully and return None
+        THEN it should handle the error gracefully and return None with grammar_error
         """
         from tutor.agents.grammar import grammar_node
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.side_effect = Exception("LLM API error")
+        mock_llm = MagicMock()
+        mock_llm.astream.side_effect = Exception("LLM API error")
 
         with patch("tutor.agents.grammar.get_llm", return_value=mock_llm):
             result = await grammar_node(grammar_state)
 
         assert "grammar_result" in result
         assert result["grammar_result"] is None
+        assert "grammar_error" in result
+
+    @pytest.mark.asyncio
+    async def test_grammar_node_streams_tokens_via_queue(self, grammar_state: TutorState) -> None:
+        """grammar_node with token_queue should put tokens into queue and end with None sentinel."""
+        import asyncio
+
+        from tutor.agents.grammar import grammar_node
+
+        mock_chunks = [MagicMock(), MagicMock()]
+        mock_chunks[0].content = "Hello"
+        mock_chunks[1].content = " World"
+
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            for chunk in mock_chunks:
+                yield chunk
+
+        mock_llm.astream = mock_astream
+
+        queue: asyncio.Queue = asyncio.Queue()
+
+        with patch("tutor.agents.grammar.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.grammar.render_prompt", return_value="Test prompt"):
+            result = await grammar_node(grammar_state, token_queue=queue)
+
+        received = []
+        while not queue.empty():
+            received.append(queue.get_nowait())
+
+        assert received == ["Hello", " World", None]
+        assert result.get("grammar_result") is not None
+
+    @pytest.mark.asyncio
+    async def test_grammar_node_backward_compatible_without_queue(self, grammar_state: TutorState) -> None:
+        """grammar_node without token_queue should work normally."""
+        from tutor.agents.grammar import grammar_node
+
+        mock_chunk = MagicMock()
+        mock_chunk.content = "Grammar content"
+
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
+
+        with patch("tutor.agents.grammar.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.grammar.render_prompt", return_value="Test prompt"):
+            result = await grammar_node(grammar_state)  # no token_queue
+
+        assert result.get("grammar_result") is not None
+        assert result["grammar_result"].content is not None
+
+    @pytest.mark.asyncio
+    async def test_grammar_node_sends_sentinel_on_error(self, grammar_state: TutorState) -> None:
+        """On error, grammar_node should put None sentinel and return grammar_error key."""
+        import asyncio
+
+        from tutor.agents.grammar import grammar_node
+
+        mock_llm = MagicMock()
+        mock_llm.astream.side_effect = Exception("LLM API error")
+
+        queue: asyncio.Queue = asyncio.Queue()
+
+        with patch("tutor.agents.grammar.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.grammar.render_prompt", return_value="Test prompt"):
+            result = await grammar_node(grammar_state, token_queue=queue)
+
+        sentinel = queue.get_nowait()
+        assert sentinel is None
+        assert result.get("grammar_error") is not None
+        assert result.get("grammar_result") is None
 
 
 class TestVocabularyAgent:
@@ -940,7 +1128,7 @@ class TestAgentErrorHandling:
         """
         GIVEN an agent that encounters an error
         WHEN the agent is called
-        THEN it should return None for its result field
+        THEN it should return None for its result field and set reading_error
         """
         from tutor.agents.reading import reading_node
 
@@ -959,3 +1147,4 @@ class TestAgentErrorHandling:
         # Should handle error gracefully
         assert "reading_result" in result
         assert result["reading_result"] is None
+        assert "reading_error" in result

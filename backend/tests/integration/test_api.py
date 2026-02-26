@@ -73,59 +73,45 @@ class TestAnalyzeEndpoint:
     """Tests for POST /api/v1/tutor/analyze endpoint."""
 
     def test_analyze_endpoint_streams_sse(self, client, mock_graph, mock_session_manager):
-        """Test that analyze endpoint returns SSE stream with correct events."""
-        from tutor.schemas import AnalyzeResponse, VocabularyResult, VocabularyWordEntry
+        """Test that analyze endpoint returns SSE stream with correct events.
 
-        # Mock astream_events as an async generator
-        async def mock_astream_events(*args, **kwargs):
-            # Reading token
-            chunk = MagicMock()
-            chunk.content = "Reading content"
-            yield {
-                "event": "on_chat_model_stream",
-                "metadata": {"langgraph_node": "reading"},
-                "data": {"chunk": chunk},
-            }
-            # Reading done
-            yield {
-                "event": "on_chain_end",
-                "name": "reading",
-                "data": {"output": {}},
-            }
-            # Grammar token
-            chunk = MagicMock()
-            chunk.content = "Grammar analysis"
-            yield {
-                "event": "on_chat_model_stream",
-                "metadata": {"langgraph_node": "grammar"},
-                "data": {"chunk": chunk},
-            }
-            # Grammar done
-            yield {
-                "event": "on_chain_end",
-                "name": "grammar",
-                "data": {"output": {}},
-            }
-            # Aggregator done with vocabulary
-            analyze_response = AnalyzeResponse(
-                session_id="test-session-123",
-                reading=None,
-                grammar=None,
-                vocabulary=VocabularyResult(
+        SPEC-VOCAB-003: Analyze flow uses direct asyncio.Task execution, bypassing LangGraph.
+        Mocks reading_node, grammar_node, vocabulary_node, and supervisor_node directly.
+        """
+        from tutor.schemas import GrammarResult, ReadingResult, VocabularyResult, VocabularyWordEntry
+
+        async def mock_supervisor_node(state):
+            return {"supervisor_analysis": None}
+
+        async def mock_reading_node(state, token_queue=None):
+            if token_queue is not None:
+                await token_queue.put("Reading content")
+                await token_queue.put(None)  # sentinel
+            return {"reading_result": ReadingResult(content="Reading content")}
+
+        async def mock_grammar_node(state, token_queue=None):
+            if token_queue is not None:
+                await token_queue.put("Grammar analysis")
+                await token_queue.put(None)  # sentinel
+            return {"grammar_result": GrammarResult(content="Grammar analysis")}
+
+        async def mock_vocabulary_node(state, token_queue=None):
+            if token_queue is not None:
+                await token_queue.put("vocab token")
+                await token_queue.put(None)  # sentinel
+            return {
+                "vocabulary_result": VocabularyResult(
                     words=[VocabularyWordEntry(word="test", content="**어원:** 테스트 어원 설명.")]
-                ),
-            )
-            yield {
-                "event": "on_chain_end",
-                "name": "aggregator",
-                "data": {"output": {"analyze_response": analyze_response}},
+                )
             }
 
-        mock_graph.astream_events = mock_astream_events
-
-        response = client.post(
-            "/api/v1/tutor/analyze", json={"text": "This is a test text for analysis.", "level": 3}
-        )
+        with patch("tutor.routers.tutor.supervisor_node", mock_supervisor_node), \
+             patch("tutor.routers.tutor.reading_node", mock_reading_node), \
+             patch("tutor.routers.tutor.grammar_node", mock_grammar_node), \
+             patch("tutor.routers.tutor.vocabulary_node", mock_vocabulary_node):
+            response = client.post(
+                "/api/v1/tutor/analyze", json={"text": "This is a test text for analysis.", "level": 3}
+            )
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
@@ -134,7 +120,7 @@ class TestAnalyzeEndpoint:
         content = response.text
         events = self._parse_sse_events(content)
 
-        # Verify expected token-level streaming events
+        # Verify expected token-level streaming events (SPEC-VOCAB-003)
         event_types = [e["event"] for e in events]
         assert "reading_token" in event_types
         assert "grammar_token" in event_types

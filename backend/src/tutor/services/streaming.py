@@ -143,3 +143,27 @@ def format_vocabulary_error(message: str) -> str:
         A formatted SSE event with event_type="vocabulary_error"
     """
     return format_sse_event("vocabulary_error", {"message": message, "code": "vocabulary_error"})
+
+
+def format_reading_error(message: str) -> str:
+    """Format reading error as SSE event.
+
+    Args:
+        message: The error message from the reading agent
+
+    Returns:
+        A formatted SSE event with event_type="reading_error"
+    """
+    return format_sse_event("reading_error", {"message": message, "code": "reading_error"})
+
+
+def format_grammar_error(message: str) -> str:
+    """Format grammar error as SSE event.
+
+    Args:
+        message: The error message from the grammar agent
+
+    Returns:
+        A formatted SSE event with event_type="grammar_error"
+    """
+    return format_sse_event("grammar_error", {"message": message, "code": "grammar_error"})

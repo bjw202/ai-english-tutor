@@ -18,13 +18,13 @@ from tutor.state import TutorState
 class TestRouteByTask:
     """Test suite for route_by_task routing function."""
 
-    def test_route_analyze_dispatches_three_tutors_in_parallel(self) -> None:
+    def test_route_analyze_returns_empty_list(self) -> None:
         """
-        Test that 'analyze' task_type returns Send objects for all three tutors.
+        Test that 'analyze' task_type returns an empty list (SPEC-VOCAB-003).
 
         Given: A TutorState with task_type='analyze'
         When: route_by_task is called
-        Then: Returns a list of 3 Send objects for reading, grammar, vocabulary
+        Then: Returns an empty list (agents handled as asyncio.Tasks in the router)
         """
         # Arrange
         state: TutorState = {
@@ -39,13 +39,19 @@ class TestRouteByTask:
         result = route_by_task(state)
 
         # Assert
-        assert len(result) == 3, "Should dispatch 3 agents in parallel"
+        assert result == [], "Analyze flow should return empty list (SPEC-VOCAB-003)"
 
-        # Verify each Send object
-        node_names = [send.node for send in result]
-        assert "reading" in node_names, "Should include reading node"
-        assert "grammar" in node_names, "Should include grammar node"
-        assert "vocabulary" in node_names, "Should include vocabulary node"
+    def test_route_analyze_dispatches_no_langgraph_agents(self) -> None:
+        """SPEC-VOCAB-003: analyze flow returns empty list (agents handled as asyncio.Tasks)."""
+        state: TutorState = {
+            "messages": [],
+            "level": 3,
+            "session_id": "test-session-123",
+            "input_text": "Test text for analysis.",
+            "task_type": "analyze",
+        }
+        result = route_by_task(state)
+        assert result == [], "Analyze flow should return empty list (SPEC-VOCAB-003)"
 
     def test_route_image_process_dispatches_image_processor(self) -> None:
         """
@@ -124,7 +130,7 @@ class TestRouteByTask:
 
         Given: A TutorState without task_type field
         When: route_by_task is called
-        Then: Returns Send objects for all three tutors (analyze behavior)
+        Then: Returns empty list (analyze behavior, SPEC-VOCAB-003)
         """
         # Arrange - state without task_type
         state: TutorState = {
@@ -139,7 +145,7 @@ class TestRouteByTask:
         result = route_by_task(state)
 
         # Assert
-        assert len(result) == 3, "Should default to analyze (3 parallel agents)"
+        assert len(result) == 0, "Should default to analyze (empty list, SPEC-VOCAB-003)"
 
 
 class TestRouteAfterImage:
@@ -307,7 +313,8 @@ class TestGraphCreation:
 
         Given: A compiled graph
         When: Examining graph structure
-        Then: Contains nodes: supervisor, reading, grammar, vocabulary, image_processor, aggregator
+        Then: Contains nodes: supervisor, image_processor, aggregator
+        Note: reading, grammar, vocabulary are NOT graph nodes (SPEC-VOCAB-003)
         """
         # Arrange
         graph = create_graph()
@@ -317,12 +324,9 @@ class TestGraphCreation:
         # We can access them through the graph's internal structure
         graph_dict = graph.nodes  # type: ignore
 
-        # Assert
+        # Assert - SPEC-VOCAB-003: reading, grammar, vocabulary removed from graph
         expected_nodes = {
             "supervisor",
-            "reading",
-            "grammar",
-            "vocabulary",
             "image_processor",
             "aggregator",
         }
@@ -331,6 +335,13 @@ class TestGraphCreation:
         assert (
             expected_nodes <= actual_nodes
         ), f"Graph should contain nodes: {expected_nodes}, but has: {actual_nodes}"
+
+        # Verify that reading, grammar, vocabulary are NOT in the graph
+        removed_nodes = {"reading", "grammar", "vocabulary"}
+        for node in removed_nodes:
+            assert node not in actual_nodes, (
+                f"Node '{node}' should NOT be in graph (SPEC-VOCAB-003)"
+            )
 
     def test_graph_entry_point_is_supervisor(self) -> None:
         """
@@ -406,13 +417,13 @@ class TestGraphFunctional:
             # Assert
             assert graph is not None
 
-    def test_graph_parallel_dispatch_structure(self) -> None:
+    def test_graph_analyze_returns_no_dispatches(self) -> None:
         """
-        Test that graph properly structures parallel dispatch.
+        Test that graph analyze task returns no LangGraph dispatches (SPEC-VOCAB-003).
 
         Given: A graph with analyze task
         When: Route function is called
-        Then: Returns multiple Send objects for parallel execution
+        Then: Returns empty list (agents handled as asyncio.Tasks in router)
         """
         # Arrange
         state: TutorState = {
@@ -427,12 +438,7 @@ class TestGraphFunctional:
         sends = route_by_task(state)
 
         # Assert
-        assert len(sends) == 3, "Should have 3 parallel dispatches"
-        # Each Send should have the correct structure
-        for send in sends:
-            assert hasattr(send, "node"), "Send should have node attribute"
-            assert hasattr(send, "arg"), "Send should have arg attribute"
-            assert send.node in ["reading", "grammar", "vocabulary"]
+        assert sends == [], "Should have 0 LangGraph dispatches (SPEC-VOCAB-003)"
 
 
 class TestGraphEdges:

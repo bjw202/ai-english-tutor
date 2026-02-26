@@ -538,6 +538,103 @@ describe("useTutorStream", () => {
     expect(result.current.state.vocabularyRawContent).toBe("");
   });
 
+  it("should handle reading_error event: set readingStreaming to false and readingError message", async () => {
+    const chunks = [
+      'event: reading_token\ndata: {"token": "partial "}\n\n',
+      'event: reading_error\ndata: {"message": "LLM failed", "code": "reading_error"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.readingError).toBe("LLM failed");
+    expect(result.current.state.readingStreaming).toBe(false);
+    // Other agents' streaming states should not be affected by reading_error alone
+    expect(result.current.state.grammarError).toBeNull();
+    expect(result.current.state.vocabularyError).toBeNull();
+  });
+
+  it("should handle grammar_error event: set grammarStreaming to false and grammarError message", async () => {
+    const chunks = [
+      'event: grammar_token\ndata: {"token": "partial "}\n\n',
+      'event: grammar_error\ndata: {"message": "LLM failed", "code": "grammar_error"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.grammarError).toBe("LLM failed");
+    expect(result.current.state.grammarStreaming).toBe(false);
+    // Other agents' streaming states should not be affected by grammar_error alone
+    expect(result.current.state.readingError).toBeNull();
+    expect(result.current.state.vocabularyError).toBeNull();
+  });
+
+  it("should not affect other agents when one agent fails independently", async () => {
+    const words = [{ word: "test", content: "content" }];
+    const chunks = [
+      'event: reading_error\ndata: {"message": "Reading failed", "code": "reading_error"}\n\n',
+      `event: vocabulary_chunk\ndata: ${JSON.stringify({ words })}\n\n`,
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    // Reading failed independently
+    expect(result.current.state.readingError).toBe("Reading failed");
+    expect(result.current.state.readingStreaming).toBe(false);
+    // Vocabulary succeeded independently
+    expect(result.current.state.vocabularyWords).toHaveLength(1);
+    expect(result.current.state.vocabularyStreaming).toBe(false);
+    // Grammar streaming was stopped by done event, error remains null
+    expect(result.current.state.grammarError).toBeNull();
+  });
+
   it("should reset vocabularyRawContent when reset is called", async () => {
     const chunks = [
       'event: vocabulary_token\ndata: {"token": "some content"}\n\n',
