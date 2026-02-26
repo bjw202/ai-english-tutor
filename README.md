@@ -72,7 +72,7 @@ ai-english-tutor/
 - **어원 네트워크 어휘**: PIE 어근부터 현재 의미까지의 발전 과정을 통한 깊이 있는 어휘 학습
 - **이미지 분석**: 교과서/문제지 사진 업로드 후 OpenAI Vision OCR 기반 한국어 교육 분석 (Vercel SSE 하트비트로 타임아웃 방지)
 - **이해도 조절**: Level 1-5 슬라이더로 한국 교육학적 설명 깊이 조절
-- **실시간 스트리밍**: SSE 기반 토큰 단위 스트리밍 - 모든 3개 에이전트(독해, 문법, 어휘)가 동시에 토큰 단위로 스트리밍하여 ChatGPT 스타일 타이핑 효과 제공
+- **실시간 스트리밍**: SSE 기반 토큰 단위 스트리밍 - 모든 3개 에이전트(독해, 문법, 어휘)가 동시에 토큰 단위로 스트리밍하여 ChatGPT 스타일 타이핑 효과 제공. Edge Runtime 전환으로 Vercel 스트리밍 타임아웃 문제 완전히 해결됨
 
 ## 설치 및 실행
 
@@ -206,12 +206,26 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 | `done` | `{"session_id": "...", "status": "complete"}` | 전체 완료 |
 | `error` | `{"message": "...", "code": "..."}` | 전역 오류 |
 
-## 이미지 분석 기능 배포 참고사항
+## 배포 참고사항
+
+### 텍스트 분석 (SSE 스트리밍)
+
+텍스트 분석은 3개 AI 에이전트(독해, 문법, 어휘)가 동시에 스트리밍합니다. Vercel 기본 서버리스에는 60초 타임아웃이 있어 장시간 스트리밍 시 강제 연결 종료되는 문제가 있었습니다.
+
+**해결 방법: Edge Runtime 전환**
+- 파일: `/src/app/api/tutor/analyze/route.ts`
+- 설정: `export const runtime = 'edge';` 추가
+- 효과: Vercel CDN 엣지에서 직접 실행하므로 시간 제한 없이 안전하게 스트리밍 가능
+- 보너스: 전 세계 사용자에게 빠른 응답 속도 제공
+
+자세한 설명: `.moai/docs/EDGE-RUNTIME-EXPLAINER.md`
+
+### 이미지 분석
 
 이미지 분석은 OpenAI Vision API를 사용하며 처리 시간이 25-35초 소요될 수 있습니다.
 
 - **Vercel 설정**: `maxDuration=60` 필수 (기본값 10초로는 타임아웃 발생)
-- **SSE 하트비트**: 5초 간격으로 연결 유지 (`": comment\n\n"` 형식)
+- **SSE 하트비트**: 5초 간격으로 연결 유지 (`": comment\n\n"` 형식) - 다른 네트워크 노드에서의 타임아웃 방지
 - **LangGraph 상태**: `TutorState`에 `image_data`, `mime_type` 필드 반드시 포함
 
 자세한 배포 이슈 및 학습 내용: `.moai/learning/IMAGE-ANALYSIS-DEPLOYMENT-LEARNINGS.md`
@@ -220,7 +234,7 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 
 ### 프론트엔드
 
-- **테스트**: 107개 통과 (스트리밍 테스트 14개 포함)
+- **테스트**: 117개 통과 (20개 파일, 스트리밍 테스트 포함)
 - **커버리지**: 91.98% (Lines), 86.5% (Branches)
 - **TypeScript**: strict mode, 0 에러
 - **ESLint**: 0 에러
@@ -228,7 +242,7 @@ uv run pytest tests/ -v --cov=src/tutor --cov-report=term-missing
 
 ### 백엔드
 
-- **테스트**: 252개 통과
+- **테스트**: 253개 통과
 - **커버리지**: 92% (Lines)
 - **Ruff**: 0 에러
 - **LLM 모델 통합**: 모든 에이전트 gpt-4o-mini 통일 (비용 95% 절감)
