@@ -14,6 +14,7 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 
+from tutor.agents.vocabulary import vocabulary_node
 from tutor.graph import graph
 from tutor.schemas import AnalyzeImageRequest, AnalyzeRequest, ChatRequest
 from tutor.services import session_manager
@@ -40,13 +41,18 @@ _SSE_HEARTBEAT_COMMENT = ": heartbeat\n\n"
 async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGenerator[str]:
     """Stream LangGraph events as SSE tokens.
 
-    Routes astream_events to appropriate SSE event types:
-    - on_chat_model_stream + reading node -> reading_token
-    - on_chat_model_stream + grammar node -> grammar_token
-    - on_chain_end + vocabulary -> vocabulary_chunk (batch)
+    Reading and grammar are streamed via LangGraph's astream_events.
+    Vocabulary runs as a concurrent asyncio.Task outside the graph to avoid
+    the LangGraph 0.3.34 FuturesDict weakref GC bug: when vocabulary (the
+    slowest parallel node) completes after reading and grammar, the FuturesDict
+    callback is already GC'd, causing TypeError: 'NoneType' object is not callable.
 
-    Sends SSE comment heartbeats every 5 seconds during idle periods
-    (e.g. while waiting for OpenAI Vision API) to prevent proxy timeouts.
+    Flow:
+    1. Capture supervisor output to get supervisor_analysis for vocabulary context
+    2. Start vocabulary_task as soon as supervisor completes
+    3. Stream reading/grammar tokens from graph events
+    4. After graph stream ends, await vocabulary_task with heartbeats
+    5. Emit vocabulary_chunk + section_done("vocabulary") + done
 
     Args:
         input_state: The initial state dict to pass to the graph
@@ -55,6 +61,8 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
     Yields:
         Formatted SSE event strings (or SSE comment heartbeats)
     """
+    vocabulary_task: asyncio.Task | None = None
+
     try:
         async for event in _stream_with_heartbeat(input_state):
             if event is None:
@@ -64,8 +72,15 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
 
             kind = event["event"]
 
+            # Start vocabulary task as soon as supervisor analysis is available
+            if kind == "on_chain_end" and event.get("name") == "supervisor" and vocabulary_task is None:
+                output = event.get("data", {}).get("output", {})
+                supervisor_analysis = output.get("supervisor_analysis")
+                vocab_state = {**input_state, "supervisor_analysis": supervisor_analysis}
+                vocabulary_task = asyncio.create_task(vocabulary_node(vocab_state))
+
             # Token-level streaming for reading and grammar
-            if kind == "on_chat_model_stream":
+            elif kind == "on_chat_model_stream":
                 node = event.get("metadata", {}).get("langgraph_node", "")
                 chunk = event["data"].get("chunk")
                 if chunk:
@@ -76,53 +91,55 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
                         elif node == "grammar":
                             yield format_grammar_token(token)
 
-            # Section completion events
+            # Section completion events for reading and grammar only
             elif kind == "on_chain_end":
                 node_name = event.get("name", "")
                 if node_name == "reading":
                     yield format_section_done("reading")
                 elif node_name == "grammar":
                     yield format_section_done("grammar")
-                elif node_name == "vocabulary":
-                    output = event.get("data", {}).get("output", {})
-                    vocab_error = output.get("vocabulary_error")
-                    vocab_result = output.get("vocabulary_result")
-                    if vocab_error:
-                        yield format_vocabulary_error(vocab_error)
-                    elif vocab_result:
-                        # Handle both Pydantic model and plain dict (astream_events serialization)
-                        if hasattr(vocab_result, "model_dump"):
-                            data = vocab_result.model_dump()
-                        elif isinstance(vocab_result, dict):
-                            data = vocab_result
-                        else:
-                            data = None
-                        if data and data.get("words"):
-                            yield format_vocabulary_chunk(data)
-                    yield format_section_done("vocabulary")
-                elif node_name == "aggregator":
-                    # Extract vocabulary from aggregator output (fallback)
-                    output = event.get("data", {}).get("output", {})
-                    analyze_response = output.get("analyze_response")
-                    if analyze_response:
-                        # Handle both Pydantic model and plain dict
-                        if hasattr(analyze_response, "vocabulary"):
-                            vocab = analyze_response.vocabulary
-                        elif isinstance(analyze_response, dict):
-                            vocab = analyze_response.get("vocabulary")
-                        else:
-                            vocab = None
-                        if vocab:
-                            if hasattr(vocab, "model_dump"):
-                                yield format_vocabulary_chunk(vocab.model_dump())
-                            elif isinstance(vocab, dict) and vocab.get("words"):
-                                yield format_vocabulary_chunk(vocab)
 
+        # Fallback: start vocabulary without supervisor context if supervisor event was missed
+        if vocabulary_task is None:
+            vocabulary_task = asyncio.create_task(vocabulary_node(input_state))
+
+        # Wait for vocabulary task with heartbeat keep-alives
+        while not vocabulary_task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(vocabulary_task), timeout=_HEARTBEAT_INTERVAL_SECONDS)
+                break
+            except asyncio.TimeoutError:
+                yield _SSE_HEARTBEAT_COMMENT
+
+        # Emit vocabulary result
+        try:
+            vocab_result = await vocabulary_task
+            vocab_error = vocab_result.get("vocabulary_error")
+            vocabulary_result = vocab_result.get("vocabulary_result")
+            if vocab_error:
+                yield format_vocabulary_error(vocab_error)
+            elif vocabulary_result:
+                if hasattr(vocabulary_result, "model_dump"):
+                    data = vocabulary_result.model_dump()
+                elif isinstance(vocabulary_result, dict):
+                    data = vocabulary_result
+                else:
+                    data = None
+                if data and data.get("words"):
+                    yield format_vocabulary_chunk(data)
+        except Exception as e:
+            logger.error(f"Vocabulary task error: {e}")
+            yield format_vocabulary_error(str(e))
+
+        yield format_section_done("vocabulary")
         yield format_done_event(session_id)
 
     except asyncio.CancelledError:
-        pass
+        if vocabulary_task and not vocabulary_task.done():
+            vocabulary_task.cancel()
     except Exception as e:
+        if vocabulary_task and not vocabulary_task.done():
+            vocabulary_task.cancel()
         yield format_error_event(str(e), "processing_error")
 
 

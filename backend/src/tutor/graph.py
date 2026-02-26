@@ -16,7 +16,6 @@ from tutor.agents.grammar import grammar_node
 from tutor.agents.image_processor import image_processor_node
 from tutor.agents.reading import reading_node
 from tutor.agents.supervisor import supervisor_node
-from tutor.agents.vocabulary import vocabulary_node
 from tutor.state import TutorState
 
 
@@ -74,11 +73,14 @@ def route_by_task(state: TutorState) -> list[Send]:
     task_type = state.get("task_type", "analyze")
 
     if task_type == "analyze":
-        # Dispatch all three tutor agents in parallel
+        # Dispatch reading and grammar in parallel via LangGraph.
+        # Vocabulary is handled as a direct asyncio.Task in the streaming router
+        # to avoid the LangGraph 0.3.34 FuturesDict weakref GC bug that causes
+        # TypeError: 'NoneType' object is not callable when the slower vocabulary
+        # node completes after reading and grammar have already finished.
         return [
             Send("reading", state),
             Send("grammar", state),
-            Send("vocabulary", state),
         ]
     elif task_type == "image_process":
         # Route to image processor first
@@ -136,7 +138,6 @@ def create_graph():
     workflow.add_node("supervisor", supervisor_node)
     workflow.add_node("reading", reading_node)
     workflow.add_node("grammar", grammar_node)
-    workflow.add_node("vocabulary", vocabulary_node)
     workflow.add_node("image_processor", image_processor_node)
     workflow.add_node("aggregator", aggregator_node)
 
@@ -148,10 +149,10 @@ def create_graph():
     # that will be dispatched in parallel
     workflow.add_conditional_edges("supervisor", route_by_task)
 
-    # All tutor nodes lead to aggregator for result collection
+    # Reading and grammar nodes lead to aggregator for result collection.
+    # Vocabulary is handled as a direct asyncio.Task in the streaming router.
     workflow.add_edge("reading", "aggregator")
     workflow.add_edge("grammar", "aggregator")
-    workflow.add_edge("vocabulary", "aggregator")
 
     # After image processing, conditionally route to analysis agents or aggregator
     workflow.add_conditional_edges("image_processor", route_after_image)
