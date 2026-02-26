@@ -109,6 +109,18 @@ def format_grammar_token(token: str) -> str:
     return format_sse_event("grammar_token", {"token": token})
 
 
+def format_vocabulary_token(token: str) -> str:
+    """Format a single vocabulary token as SSE event.
+
+    Args:
+        token: A single token string from the vocabulary agent LLM stream
+
+    Returns:
+        A formatted SSE event with event_type="vocabulary_token"
+    """
+    return format_sse_event("vocabulary_token", {"token": token})
+
+
 def format_section_done(section: str) -> str:
     """Format section completion as SSE event.
 

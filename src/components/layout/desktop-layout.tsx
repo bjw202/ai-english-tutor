@@ -107,6 +107,7 @@ export function DesktopLayout({
                   grammarStreaming={streamState.grammarStreaming}
                   vocabularyStreaming={streamState.vocabularyStreaming}
                   vocabularyError={streamState.vocabularyError}
+                  vocabularyRawContent={streamState.vocabularyRawContent}
                 />
               </div>
             </div>

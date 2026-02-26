@@ -27,6 +27,7 @@ from tutor.services.streaming import (
     format_sse_event,
     format_vocabulary_chunk,
     format_vocabulary_error,
+    format_vocabulary_token,
 )
 
 
@@ -284,6 +285,24 @@ class TestSSEFormatting:
         parsed = json.loads(data_line)
         assert parsed["message"] == message
         assert parsed["code"] == "vocabulary_error"
+
+    def test_sse_format_vocabulary_token(self):
+        """Test that vocabulary token events are formatted correctly as SSE events."""
+        token = "Hello"
+        result = format_vocabulary_token(token)
+        assert result.startswith("event: vocabulary_token\ndata: ")
+        assert "\n\n" in result
+        lines = result.strip().split("\n")
+        data_line = lines[1].replace("data: ", "")
+        parsed = json.loads(data_line)
+        assert parsed["token"] == token
+
+    def test_sse_format_vocabulary_token_exact_format(self):
+        """Test the exact SSE format for vocabulary token matches acceptance criteria."""
+        token = "test"
+        result = format_vocabulary_token(token)
+        expected = 'event: vocabulary_token\ndata: {"token": "test"}\n\n'
+        assert result == expected
 
 
 class TestImageValidation:

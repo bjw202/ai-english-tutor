@@ -497,9 +497,9 @@ class TestVocabularyAgent:
         """
         from tutor.agents.vocabulary import vocabulary_node
 
-        # Mock Markdown output with ## headers
-        mock_response = MagicMock()
-        mock_response.content = (
+        # Mock Markdown output delivered as a single astream chunk
+        mock_chunk = MagicMock()
+        mock_chunk.content = (
             "## ephemeral\n\n"
             "### 1. 기본 뜻\n짧은 시간 동안만 지속되는\n\n"
             "### 2. 문장 속 의미\n이 문장에서는 찰나의 아름다움을 의미\n\n"
@@ -510,8 +510,12 @@ class TestVocabularyAgent:
             "---"
         )
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
 
         with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm), \
              patch("tutor.agents.vocabulary.render_prompt", return_value="Test prompt"):
@@ -537,11 +541,15 @@ class TestVocabularyAgent:
         """
         from tutor.agents.vocabulary import vocabulary_node
 
-        mock_response = MagicMock()
-        mock_response.content = "## test\n\ncontent\n\n---"
+        mock_chunk = MagicMock()
+        mock_chunk.content = "## test\n\ncontent\n\n---"
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
 
         mock_settings_obj = MagicMock()
         mock_settings_obj.VOCABULARY_MODEL = "gpt-4o-mini"
@@ -565,8 +573,8 @@ class TestVocabularyAgent:
         """
         from tutor.agents.vocabulary import vocabulary_node
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.side_effect = Exception("API Error")
+        mock_llm = MagicMock()
+        mock_llm.astream.side_effect = Exception("API Error")
 
         with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm):
             result = await vocabulary_node(vocabulary_state)
@@ -587,8 +595,8 @@ class TestVocabularyAgent:
         """
         from tutor.agents.vocabulary import vocabulary_node
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.side_effect = Exception("API Error")
+        mock_llm = MagicMock()
+        mock_llm.astream.side_effect = Exception("API Error")
 
         with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm):
             result = await vocabulary_node(vocabulary_state)
@@ -613,11 +621,15 @@ class TestVocabularyAgent:
 
         vocabulary_state["input_text"] = "The cat sat on the mat."
 
-        mock_response = MagicMock()
-        mock_response.content = "단어 설명이 필요한 어휘가 없습니다."
+        mock_chunk = MagicMock()
+        mock_chunk.content = "단어 설명이 필요한 어휘가 없습니다."
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
 
         with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm), \
              patch("tutor.agents.vocabulary.render_prompt", return_value="Test prompt"):
@@ -627,6 +639,105 @@ class TestVocabularyAgent:
         vocab_result = result["vocabulary_result"]
         assert isinstance(vocab_result, VocabularyResult)
         assert len(vocab_result.words) == 0
+
+    @pytest.mark.asyncio
+    async def test_vocabulary_node_puts_tokens_in_queue(
+        self, vocabulary_state: TutorState
+    ) -> None:
+        """
+        GIVEN a vocabulary_node called with a token_queue
+        WHEN the LLM yields ["Hello", " World"] tokens
+        THEN the queue should receive each token followed by None sentinel
+        """
+        import asyncio
+
+        from tutor.agents.vocabulary import vocabulary_node
+
+        mock_chunks = [MagicMock(), MagicMock()]
+        mock_chunks[0].content = "Hello"
+        mock_chunks[1].content = " World"
+
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            for chunk in mock_chunks:
+                yield chunk
+
+        mock_llm.astream = mock_astream
+
+        queue: asyncio.Queue = asyncio.Queue()
+
+        with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.vocabulary.render_prompt", return_value="Test prompt"):
+            result = await vocabulary_node(vocabulary_state, token_queue=queue)
+
+        # Drain the queue
+        received = []
+        while not queue.empty():
+            received.append(queue.get_nowait())
+
+        assert received == ["Hello", " World", None]
+        assert "vocabulary_result" in result
+
+    @pytest.mark.asyncio
+    async def test_vocabulary_node_sends_sentinel_on_error(
+        self, vocabulary_state: TutorState
+    ) -> None:
+        """
+        GIVEN a vocabulary_node called with a token_queue
+        WHEN the LLM raises an exception during astream
+        THEN the queue should receive None sentinel and result contains vocabulary_error
+        """
+        import asyncio
+
+        from tutor.agents.vocabulary import vocabulary_node
+
+        mock_llm = MagicMock()
+        # side_effect raises immediately when astream() is called
+        mock_llm.astream.side_effect = Exception("LLM API error")
+
+        queue: asyncio.Queue = asyncio.Queue()
+
+        with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.vocabulary.render_prompt", return_value="Test prompt"):
+            result = await vocabulary_node(vocabulary_state, token_queue=queue)
+
+        sentinel = queue.get_nowait()
+        assert sentinel is None
+        assert "vocabulary_error" in result
+        assert result["vocabulary_error"] == "LLM API error"
+
+    @pytest.mark.asyncio
+    async def test_vocabulary_node_backward_compatible_without_queue(
+        self, vocabulary_state: TutorState
+    ) -> None:
+        """
+        GIVEN vocabulary_node called without token_queue (original signature)
+        WHEN the LLM yields tokens
+        THEN it should return vocabulary_result normally without errors
+        """
+        from tutor.agents.vocabulary import vocabulary_node
+
+        mock_chunk = MagicMock()
+        mock_chunk.content = (
+            "## ephemeral\n\n### 1. 기본 뜻\n짧은 시간\n\n---"
+        )
+
+        mock_llm = MagicMock()
+
+        async def mock_astream(_prompt):
+            yield mock_chunk
+
+        mock_llm.astream = mock_astream
+
+        with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm), \
+             patch("tutor.agents.vocabulary.render_prompt", return_value="Test prompt"):
+            result = await vocabulary_node(vocabulary_state)  # no token_queue
+
+        assert "vocabulary_result" in result
+        vocab_result = result["vocabulary_result"]
+        assert isinstance(vocab_result, VocabularyResult)
+        assert len(vocab_result.words) >= 1
 
 
 class TestImageProcessorAgent:

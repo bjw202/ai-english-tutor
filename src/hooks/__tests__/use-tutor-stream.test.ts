@@ -22,6 +22,7 @@ describe("useTutorStream", () => {
     expect(result.current.state.readingContent).toBe("");
     expect(result.current.state.grammarContent).toBe("");
     expect(result.current.state.vocabularyWords).toEqual([]);
+    expect(result.current.state.vocabularyRawContent).toBe("");
     expect(result.current.state.isStreaming).toBe(false);
     expect(result.current.state.error).toBeNull();
   });
@@ -396,5 +397,176 @@ describe("useTutorStream", () => {
 
     expect(result.current.state.vocabularyError).toBe("LLM API failed");
     expect(result.current.state.vocabularyStreaming).toBe(false);
+  });
+
+  it("should accumulate vocabularyRawContent via vocabulary_token events", async () => {
+    const chunks = [
+      'event: vocabulary_token\ndata: {"token": "## ephemeral"}\n\n',
+      'event: vocabulary_token\ndata: {"token": "\\n어원 설명"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.vocabularyRawContent).toBe("## ephemeral\n어원 설명");
+    expect(result.current.state.vocabularyStreaming).toBe(false);
+  });
+
+  it("should keep vocabularyStreaming true while vocabulary_token events arrive", async () => {
+    const chunks = [
+      'event: vocabulary_token\ndata: {"token": "## test"}\n\n',
+      'event: vocabulary_done\ndata: {"section": "vocabulary"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    // After vocabulary_done, vocabularyStreaming should be false
+    expect(result.current.state.vocabularyStreaming).toBe(false);
+    // Raw content accumulated
+    expect(result.current.state.vocabularyRawContent).toBe("## test");
+  });
+
+  it("should set vocabularyWords from vocabulary_chunk after vocabulary_token events", async () => {
+    const words = [{ word: "ephemeral", content: "어원 설명" }];
+    const chunks = [
+      'event: vocabulary_token\ndata: {"token": "## ephemeral"}\n\n',
+      `event: vocabulary_chunk\ndata: ${JSON.stringify({ words })}\n\n`,
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    // vocabulary_chunk should populate words and stop streaming
+    expect(result.current.state.vocabularyWords).toHaveLength(1);
+    expect(result.current.state.vocabularyWords[0].word).toBe("ephemeral");
+    expect(result.current.state.vocabularyStreaming).toBe(false);
+    // Raw content also accumulated from prior token events
+    expect(result.current.state.vocabularyRawContent).toBe("## ephemeral");
+  });
+
+  it("should reset vocabularyRawContent when a new stream starts", async () => {
+    // First stream: accumulate raw content
+    const firstChunks = [
+      'event: vocabulary_token\ndata: {"token": "previous content"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const firstReader = { read: vi.fn() };
+    firstChunks.forEach((chunk) => {
+      firstReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    firstReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => firstReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.vocabularyRawContent).toBe("previous content");
+
+    // Second stream: vocabularyRawContent should be reset at start
+    const secondChunks = ['event: done\ndata: {}\n\n'];
+    const secondReader = { read: vi.fn() };
+    secondChunks.forEach((chunk) => {
+      secondReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    secondReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => secondReader },
+    });
+
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.vocabularyRawContent).toBe("");
+  });
+
+  it("should reset vocabularyRawContent when reset is called", async () => {
+    const chunks = [
+      'event: vocabulary_token\ndata: {"token": "some content"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.vocabularyRawContent).toBe("some content");
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.state.vocabularyRawContent).toBe("");
   });
 });

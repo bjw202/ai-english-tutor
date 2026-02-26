@@ -8,13 +8,23 @@ interface VocabularyPanelProps {
   className?: string;
   isStreaming?: boolean;
   error?: string | null;
+  rawContent?: string;
 }
 
 /**
  * Vocabulary etymology learning panel
- * Displays list of words with Korean Markdown etymology explanations
+ * Displays list of words with Korean Markdown etymology explanations.
+ * While streaming, shows raw Markdown tokens as they arrive (when available),
+ * replacing the skeleton loader with live text. Once vocabulary_chunk arrives,
+ * switches to the structured per-word display.
  */
-export function VocabularyPanel({ result, className, isStreaming = false, error }: VocabularyPanelProps) {
+export function VocabularyPanel({
+  result,
+  className,
+  isStreaming = false,
+  error,
+  rawContent = "",
+}: VocabularyPanelProps) {
   if (error) {
     return (
       <Card className={className}>
@@ -38,6 +48,21 @@ export function VocabularyPanel({ result, className, isStreaming = false, error 
   }
 
   if (isStreaming && (!result || !result.words || result.words.length === 0)) {
+    // Show live raw Markdown tokens if available, otherwise show skeleton
+    if (rawContent) {
+      return (
+        <Card className={className}>
+          <CardHeader>
+            <CardTitle className="text-lg">어휘 어원 학습</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown>{rawContent}</ReactMarkdown>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
     return (
       <Card className={className}>
         <CardHeader>

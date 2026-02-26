@@ -5,6 +5,7 @@ export interface TutorStreamState {
   readingContent: string;
   grammarContent: string;
   vocabularyWords: VocabularyWordEntry[];
+  vocabularyRawContent: string;
   isStreaming: boolean;
   error: Error | null;
   readingStreaming: boolean;
@@ -46,6 +47,7 @@ export function useTutorStream() {
     readingContent: "",
     grammarContent: "",
     vocabularyWords: [],
+    vocabularyRawContent: "",
     isStreaming: false,
     error: null,
     readingStreaming: false,
@@ -73,6 +75,7 @@ export function useTutorStream() {
       readingContent: "",
       grammarContent: "",
       vocabularyWords: [],
+      vocabularyRawContent: "",
       readingStreaming: true,
       grammarStreaming: true,
       vocabularyStreaming: true,
@@ -177,6 +180,12 @@ export function useTutorStream() {
                   ...prev,
                   grammarContent: prev.grammarContent + (data.token || ""),
                 }));
+              } else if (currentEvent === "vocabulary_token") {
+                setState((prev) => ({
+                  ...prev,
+                  vocabularyRawContent:
+                    prev.vocabularyRawContent + (data.token || ""),
+                }));
               } else if (currentEvent === "reading_done") {
                 setState((prev) => ({
                   ...prev,
@@ -258,6 +267,7 @@ export function useTutorStream() {
       readingContent: "",
       grammarContent: "",
       vocabularyWords: [],
+      vocabularyRawContent: "",
       isStreaming: false,
       error: null,
       readingStreaming: false,

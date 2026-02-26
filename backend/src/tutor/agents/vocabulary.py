@@ -7,6 +7,7 @@ vocabulary content with 6-step etymology explanation for each word.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -80,7 +81,7 @@ def _parse_vocabulary_words(content: str) -> list[VocabularyWordEntry]:
     return words
 
 
-async def vocabulary_node(state: TutorState) -> dict:
+async def vocabulary_node(state: TutorState, token_queue: asyncio.Queue | None = None) -> dict:
     """
     Process text for vocabulary etymology explanation.
 
@@ -93,6 +94,9 @@ async def vocabulary_node(state: TutorState) -> dict:
 
     Args:
         state: TutorState containing input_text, level, and supervisor_analysis
+        token_queue: Optional asyncio.Queue to stream tokens to the router.
+            Each token is put as a string. A None sentinel is put when streaming
+            completes (or on error) to signal the consumer to stop reading.
 
     Returns:
         Dictionary with "vocabulary_result" key containing VocabularyResult
@@ -123,13 +127,27 @@ async def vocabulary_node(state: TutorState) -> dict:
     )
 
     try:
-        response = await llm.ainvoke(prompt)
-        content = response.content if hasattr(response, "content") else str(response)
-        content = normalize_vocabulary_output(content)
+        accumulated = ""
+        async for chunk in llm.astream(prompt):
+            raw = chunk.content if hasattr(chunk, "content") else ""
+            if not isinstance(raw, str):
+                continue  # skip non-text chunks (multimodal/tool-use)
+            token = raw
+            if token:
+                accumulated += token
+                if token_queue is not None:
+                    await token_queue.put(token)
+
+        if token_queue is not None:
+            await token_queue.put(None)  # sentinel: streaming complete
+
+        content = normalize_vocabulary_output(accumulated)
         words = _parse_vocabulary_words(content)
         return {"vocabulary_result": VocabularyResult(words=words)}
     except Exception as e:
         logger.error(f"Error in vocabulary_node: {e}")
+        if token_queue is not None:
+            await token_queue.put(None)  # sentinel: ensure consumer loop exits on error
         return {
             "vocabulary_result": VocabularyResult(words=[]),
             "vocabulary_error": str(e),

@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
+from typing import cast
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -27,7 +28,9 @@ from tutor.services.streaming import (
     format_section_done,
     format_vocabulary_chunk,
     format_vocabulary_error,
+    format_vocabulary_token,
 )
+from tutor.state import TutorState
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +65,7 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
         Formatted SSE event strings (or SSE comment heartbeats)
     """
     vocabulary_task: asyncio.Task | None = None
+    vocab_queue: asyncio.Queue | None = None
 
     try:
         async for event in _stream_with_heartbeat(input_state):
@@ -77,7 +81,10 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
                 output = event.get("data", {}).get("output", {})
                 supervisor_analysis = output.get("supervisor_analysis")
                 vocab_state = {**input_state, "supervisor_analysis": supervisor_analysis}
-                vocabulary_task = asyncio.create_task(vocabulary_node(vocab_state))
+                vocab_queue = asyncio.Queue()
+                vocabulary_task = asyncio.create_task(
+                    vocabulary_node(cast(TutorState, vocab_state), token_queue=vocab_queue)
+                )
 
             # Token-level streaming for reading and grammar
             elif kind == "on_chat_model_stream":
@@ -101,14 +108,25 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
 
         # Fallback: start vocabulary without supervisor context if supervisor event was missed
         if vocabulary_task is None:
-            vocabulary_task = asyncio.create_task(vocabulary_node(input_state))
+            vocab_queue = asyncio.Queue()
+            vocabulary_task = asyncio.create_task(
+                vocabulary_node(cast(TutorState, input_state), token_queue=vocab_queue)
+            )
 
-        # Wait for vocabulary task with heartbeat keep-alives
-        while not vocabulary_task.done():
+        # Stream vocabulary tokens from Queue until sentinel None is received
+        assert vocab_queue is not None
+        while True:
             try:
-                await asyncio.wait_for(asyncio.shield(vocabulary_task), timeout=_HEARTBEAT_INTERVAL_SECONDS)
-                break
-            except asyncio.TimeoutError:
+                token = await asyncio.wait_for(
+                    vocab_queue.get(), timeout=_HEARTBEAT_INTERVAL_SECONDS
+                )
+                if token is None:  # sentinel: streaming complete
+                    break
+                yield format_vocabulary_token(token)
+            except TimeoutError:
+                # No token arrived within heartbeat interval
+                if vocabulary_task.done():
+                    break
                 yield _SSE_HEARTBEAT_COMMENT
 
         # Emit vocabulary result
@@ -177,7 +195,7 @@ async def _stream_with_heartbeat(input_state: dict) -> AsyncGenerator[dict | Non
                     # Producer finished; stop iteration
                     break
                 yield event
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Check if producer task failed before sending heartbeat
                 if task.done() and not task.cancelled():
                     try:

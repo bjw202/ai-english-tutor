@@ -51,6 +51,7 @@ export function AnalysisView({ streamState }: AnalysisViewProps) {
           grammarStreaming={streamState.grammarStreaming}
           vocabularyStreaming={streamState.vocabularyStreaming}
           vocabularyError={streamState.vocabularyError}
+          vocabularyRawContent={streamState.vocabularyRawContent}
         />
       </div>
     </div>
