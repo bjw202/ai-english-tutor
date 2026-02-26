@@ -43,7 +43,7 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
     Routes astream_events to appropriate SSE event types:
     - on_chat_model_stream + reading node -> reading_token
     - on_chat_model_stream + grammar node -> grammar_token
-    - on_chain_end + aggregator -> vocabulary_chunk (batch)
+    - on_chain_end + vocabulary -> vocabulary_chunk (batch)
 
     Sends SSE comment heartbeats every 5 seconds during idle periods
     (e.g. while waiting for OpenAI Vision API) to prevent proxy timeouts.
@@ -89,19 +89,34 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
                     vocab_result = output.get("vocabulary_result")
                     if vocab_error:
                         yield format_vocabulary_error(vocab_error)
-                    elif vocab_result and hasattr(vocab_result, "words") and vocab_result.words:
-                        yield format_vocabulary_chunk(vocab_result.model_dump())
+                    elif vocab_result:
+                        # Handle both Pydantic model and plain dict (astream_events serialization)
+                        if hasattr(vocab_result, "model_dump"):
+                            data = vocab_result.model_dump()
+                        elif isinstance(vocab_result, dict):
+                            data = vocab_result
+                        else:
+                            data = None
+                        if data and data.get("words"):
+                            yield format_vocabulary_chunk(data)
                     yield format_section_done("vocabulary")
                 elif node_name == "aggregator":
-                    # Extract vocabulary from aggregator output
+                    # Extract vocabulary from aggregator output (fallback)
                     output = event.get("data", {}).get("output", {})
                     analyze_response = output.get("analyze_response")
-                    if (
-                        analyze_response
-                        and hasattr(analyze_response, "vocabulary")
-                        and analyze_response.vocabulary
-                    ):
-                        yield format_vocabulary_chunk(analyze_response.vocabulary.model_dump())
+                    if analyze_response:
+                        # Handle both Pydantic model and plain dict
+                        if hasattr(analyze_response, "vocabulary"):
+                            vocab = analyze_response.vocabulary
+                        elif isinstance(analyze_response, dict):
+                            vocab = analyze_response.get("vocabulary")
+                        else:
+                            vocab = None
+                        if vocab:
+                            if hasattr(vocab, "model_dump"):
+                                yield format_vocabulary_chunk(vocab.model_dump())
+                            elif isinstance(vocab, dict) and vocab.get("words"):
+                                yield format_vocabulary_chunk(vocab)
 
         yield format_done_event(session_id)
 
@@ -124,7 +139,7 @@ async def _stream_with_heartbeat(input_state: dict) -> AsyncGenerator[dict | Non
     Yields:
         A graph event dict, or ``None`` when the heartbeat interval elapses.
     """
-    queue: asyncio.Queue[dict | None] = asyncio.Queue()
+    queue: asyncio.Queue = asyncio.Queue()
 
     async def _producer() -> None:
         async for event in graph.astream_events(
