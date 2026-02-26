@@ -33,11 +33,11 @@
 
 | 서비스 | 모델 | 역할 | 선택 이유 |
 |--------|------|------|----------|
-| **OpenAI** | GPT-4o-mini | Supervisor Agent (라우팅) | 비용 효율, 높은 지능 |
-| **OpenAI** | GPT-4o | Grammar Tutor | 문법 분석 정확도, 구조화된 출력 |
-| **Anthropic** | Claude Sonnet | Reading Tutor | 한국어 설명 품질, 장문 분석 |
-| **Anthropic** | Claude Sonnet | Image Processor | Vision API 고품질 OCR |
-| **Anthropic** | Claude Haiku | Vocabulary Tutor | 속도 & 비용 효율 (같은 품질) |
+| **OpenAI** | gpt-4o-mini | Supervisor Agent (라우팅) | 비용 효율, 높은 지능 |
+| **OpenAI** | gpt-4o-mini | Reading Tutor | 정확도, 영어 독해 분석 |
+| **OpenAI** | gpt-4o-mini | Grammar Tutor | 문법 분석 정확도, 구조화된 출력 |
+| **OpenAI** | gpt-4o-mini | Vocabulary Tutor | 빠른 응답, 어휘 분석 |
+| **OpenAI** | gpt-4o-mini (Vision) | Image Processor | Vision API로 이미지 텍스트 추출 |
 
 ## Framework 선택 이유
 
@@ -100,81 +100,79 @@
 
 ## LLM 모델 할당 전략
 
-### 다중 LLM 사용 이유
+### 단일 LLM 사용 (gpt-4o-mini)
 
-다양한 LLM을 작업별로 최적 선택하여 비용과 성능을 균형:
+모든 에이전트에 gpt-4o-mini를 사용하여 일관된 성능과 비용 효율 달성:
 
 ```
-Supervisor 라우팅 (저비용)
+Supervisor 라우팅 (gpt-4o-mini)
          ↓
     ┌────┼────┐
     ↓    ↓    ↓
 Reading Grammar Vocab + Image
-(품질) (정확도) (속도/비용)
+(모두 gpt-4o-mini)
 ```
 
-### Supervisor Agent: GPT-4o-mini
+### Supervisor Agent: gpt-4o-mini
 
 **역할:** 사용자 입력 분석, 작업 라우팅
 
 **선택 이유:**
-- **비용 효율:** GPT-4o 대비 10배 저렴
-- **충분한 지능:** 라우팅 결정에는 충분한 수준
-- **빠른 응답:** 텍스트 분류에 최적화
+- **비용 효율:** 저렴한 API 비용
+- **충분한 지능:** 라우팅 결정에 최적화
+- **빠른 응답:** 텍스트 분류 및 라우팅에 적합
 
 **할당:**
 - 입력: 사용자 질문 또는 분석 텍스트
 - 출력: 어떤 에이전트가 필요한지 결정
 
-### Reading Tutor: Claude Sonnet
+### Reading Tutor: gpt-4o-mini
 
 **역할:** 텍스트의 전체 의미, 요약, 세부 이해 제공
 
 **선택 이유:**
-- **한국어 품질:** Claude가 한국어 설명을 더 자연스럽게 생성
-- **긴 컨텍스트:** 200K 토큰, 긴 텍스트 분석 가능
-- **품질:** GPT-4 대비 높은 문해력 (특히 문학, 뉘앙스)
+- **영어 독해:** 영어 텍스트 분석에 최적화
+- **설명 품질:** 중학생 수준의 명확한 설명
+- **비용 효율:** 모든 튜터가 동일 모델 사용
 
 **할당:**
 - 입력: 영어 텍스트
 - 출력: 의미 분석, 요약, 주제, 감정 톤
 
-### Grammar Tutor: GPT-4o
+### Grammar Tutor: gpt-4o-mini
 
 **역할:** 문법 분석, 구문 분석, 문장 구조 설명
 
 **선택 이유:**
+- **정확도:** 영어 문법 분석에 최적화
 - **구조화된 출력:** JSON 형식으로 문법 구조 반환 가능
-- **정확도:** 영어 문법 분석에 가장 높은 정확도
 - **교육적 설명:** 중학생 수준의 명확한 설명
 
 **할당:**
 - 입력: 영어 텍스트, 이해도 수준
 - 출력: 시제, 태, 문장 구조, 핵심 문법 요소
 
-### Vocabulary Tutor: Claude Haiku
+### Vocabulary Tutor: gpt-4o-mini
 
 **역할:** 주요 단어 추출, 의미, 용법 제시
 
 **선택 이유:**
-- **속도:** Sonnet 대비 4배 빠름
-- **비용:** Sonnet 대비 5배 저렴
-- **충분한 성능:** 어휘 설명에는 Haiku 충분
-- **효율성:** 병렬 처리로 전체 응답 시간 단축
+- **어휘 분석:** 영어 단어 설명에 최적화
+- **빠른 응답:** 병렬 처리로 전체 응답 시간 단축
+- **비용 효율:** 단일 모델 사용으로 비용 최소화
 
 **할당:**
 - 입력: 영어 텍스트, 단어 수 (예: 상위 10개)
 - 출력: 단어, 의미, 예문, 동의어
 
-### Image Processor: Claude Sonnet (Vision)
+### Image Processor: gpt-4o-mini (Vision)
 
 **역할:** 이미지에서 텍스트 추출 (OCR)
 
 **선택 이유:**
-- **Vision 성능:** Claude Vision이 문맥 이해도 높음
-- **정확도:** Tesseract 같은 오픈소스보다 정확
-- **유연성:** 필기, 인쇄, 교과서 모두 처리
-- **통합:** Image Processor가 Sonnet이면 추가 설정 불필요
+- **Vision 능력:** gpt-4o-mini Vision으로 이미지 텍스트 추출
+- **정확도:** 필기, 인쇄, 교과서 모두 처리
+- **통합:** 동일 모델 사용으로 관리 단순화
 
 **할당:**
 - 입력: 이미지 (PNG, JPG)
@@ -211,12 +209,11 @@ Backend:
 ```bash
 cd backend
 uv sync
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn src.tutor.main:app --reload
 ```
 
 Frontend:
 ```bash
-cd frontend
 pnpm install
 pnpm dev
 ```
@@ -266,13 +263,13 @@ GitHub Actions 워크플로우:
 **Backend 테스트:**
 ```yaml
 - run: cd backend && uv sync && pytest --cov=src
-- run: cd backend && ruff check src && black --check src
+- run: cd backend && ruff check src
 ```
 
 **Frontend 테스트:**
 ```yaml
-- run: cd frontend && pnpm install && pnpm test
-- run: cd frontend && pnpm build
+- run: pnpm install && pnpm test
+- run: pnpm build
 ```
 
 **자동 배포:**
@@ -294,7 +291,7 @@ GitHub Actions 워크플로우:
 **구현:**
 - Backend: FastAPI `StreamingResponse` 사용
 - Frontend: EventSource API 또는 fetch ReadableStream
-- 이벤트 타입: reading_chunk, grammar_chunk, vocabulary_chunk
+- 이벤트 타입: reading_chunk, grammar_chunk, vocabulary_chunk, vocabulary_done, vocabulary_error
 
 ### 2. LLM Vision을 통한 OCR (Tesseract 미사용)
 
@@ -459,18 +456,18 @@ backend/src/agents/prompts/
 ### LLM API 비용
 
 **모델별 추정 비용 (1000개 분석 기준):**
-- Supervisor (GPT-4o-mini): $0.5
-- Reading (Claude Sonnet): $15
-- Grammar (GPT-4o): $8
-- Vocabulary (Claude Haiku): $2
-- Image OCR (Claude Sonnet): $5
-- **총 비용: ~$30.50 / 1000 요청 = $0.03/요청**
+- Supervisor (gpt-4o-mini): $0.2
+- Reading (gpt-4o-mini): $2
+- Grammar (gpt-4o-mini): $2
+- Vocabulary (gpt-4o-mini): $1
+- Image OCR (gpt-4o-mini Vision): $1
+- **총 비용: ~$6.20 / 1000 요청 = $0.006/요청**
 
 **월간 예상 비용 (1000 요청/일 기준):**
-- LLM: $900/월
+- LLM: ~$186/월
 - Backend (Railway): $5-10/월
 - Frontend (Vercel): 무료
-- **총: ~$910/월**
+- **총: ~$195/월**
 
 **비용 절감 방안:**
 1. Claude Haiku로 간단한 요청 처리

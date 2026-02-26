@@ -8,109 +8,100 @@ ai-english-tutor/
 │   ├── pyproject.toml               # Python 프로젝트 설정 및 의존성
 │   ├── Dockerfile                   # Docker 컨테이너 이미지 정의
 │   ├── .env.example                 # 환경 변수 예제
-│   ├── src/
-│   │   ├── main.py                  # FastAPI 앱 초기화 및 라우터 등록
-│   │   ├── config.py                # 설정 관리 (API 키, 데이터베이스 URL 등)
-│   │   ├── api/                     # API 엔드포인트
-│   │   │   ├── router.py            # 라우터 등록 및 헬스 체크
-│   │   │   ├── tutor.py             # 튜터 관련 엔드포인트
-│   │   │   └── schemas.py           # Pydantic 요청/응답 모델
-│   │   ├── agents/                  # LangGraph 다중 에이전트 시스템
-│   │   │   ├── graph.py             # LangGraph 구성 및 실행 엔진
-│   │   │   ├── state.py             # 에이전트 상태 정의
-│   │   │   ├── supervisor.py        # Supervisor Agent (라우팅)
-│   │   │   ├── reading.py           # Reading Tutor Agent
-│   │   │   ├── grammar.py           # Grammar Tutor Agent
-│   │   │   ├── vocabulary.py        # Vocabulary Tutor Agent
-│   │   │   ├── image_processor.py   # Image Processor Agent (Vision OCR)
-│   │   │   ├── aggregator.py        # Aggregator (결과 통합)
-│   │   │   ├── prompts.py           # 프롬프트 로더 (파일 읽기 + 변수 주입)
-│   │   │   └── prompts/             # 프롬프트 템플릿 (코드와 분리)
-│   │   │       ├── supervisor.md    # Supervisor 라우팅 프롬프트
-│   │   │       ├── reading_tutor.md # 독해 튜터 시스템 프롬프트
-│   │   │       ├── grammar_tutor.md # 문법 튜터 시스템 프롬프트
-│   │   │       ├── vocabulary_tutor.md # 어휘 튜터 시스템 프롬프트
-│   │   │       ├── image_processor.md  # 이미지 처리 프롬프트
-│   │   │       └── level_instructions.yaml # 레벨별 필터링 규칙 (1-5)
-│   │   ├── services/                # 비즈니스 로직 및 유틸리티
-│   │   │   ├── image.py             # 이미지 처리 (OCR 전 처리)
-│   │   │   ├── session.py           # 세션 관리 (메모리 기반)
-│   │   │   └── streaming.py         # SSE 스트리밍 관련 유틸리티
-│   │   └── models/
-│   │       └── llm.py               # LLM 클라이언트 초기화 및 설정
-│   ├── tests/                       # 테스트 모음
-│   │   ├── test_agents/             # 에이전트 로직 테스트
-│   │   ├── test_api/                # API 엔드포인트 테스트
-│   │   └── test_services/           # 서비스 로직 테스트
-│   └── .gitignore                   # Git 무시 파일 설정
+│   └── src/
+│       └── tutor/                   # 튜터 애플리케이션 메인 패키지
+│           ├── main.py              # FastAPI 앱 초기화 및 라우터 등록
+│           ├── config.py            # 설정 관리 (API 키, 데이터베이스 URL 등)
+│           ├── schemas.py           # Pydantic 요청/응답 모델
+│           ├── state.py             # TutorState TypedDict (LangGraph 상태)
+│           ├── graph.py             # LangGraph 워크플로우 정의 및 실행 엔진
+│           ├── agents/              # LangGraph 다중 에이전트 시스템
+│           │   ├── supervisor.py    # Supervisor Agent (작업 라우팅)
+│           │   ├── reading.py       # Reading Tutor Agent
+│           │   ├── grammar.py       # Grammar Tutor Agent
+│           │   ├── vocabulary.py    # Vocabulary Tutor Agent
+│           │   ├── image_processor.py # Image Processor Agent (Vision OCR)
+│           │   └── aggregator.py    # Aggregator (결과 통합)
+│           ├── prompts.py           # 프롬프트 로더 (파일 읽기 + 변수 주입)
+│           ├── prompts/             # 프롬프트 템플릿 (코드와 분리)
+│           │   ├── supervisor.md    # Supervisor 라우팅 프롬프트
+│           │   ├── reading_tutor.md # 독해 튜터 시스템 프롬프트
+│           │   ├── grammar_tutor.md # 문법 튜터 시스템 프롬프트
+│           │   ├── vocabulary_tutor.md # 어휘 튜터 시스템 프롬프트
+│           │   ├── image_processor.md  # 이미지 처리 프롬프트
+│           │   └── level_instructions.yaml # 레벨별 필터링 규칙 (1-5)
+│           ├── routers/             # API 라우터
+│           │   └── tutor.py         # SSE 스트리밍 라우터 (_stream_graph_events)
+│           ├── services/            # 비즈니스 로직 및 유틸리티
+│           │   ├── image.py         # 이미지 처리 (OCR 전 처리)
+│           │   ├── session.py       # 세션 관리 (메모리 기반)
+│           │   └── streaming.py     # SSE 포맷터 (format_vocabulary_error 등)
+│           ├── models/              # LLM 클라이언트
+│           │   └── llm.py           # LLM 클라이언트 초기화 및 설정
+│           └── utils/               # 유틸리티 함수
+│               └── markdown_normalizer.py # 마크다운 정규화
 │
-├── frontend/                         # Next.js 프론트엔드 애플리케이션
-│   ├── package.json                 # NPM 의존성 및 스크립트
-│   ├── next.config.ts               # Next.js 설정
-│   ├── tailwind.config.ts            # Tailwind CSS 설정
-│   ├── tsconfig.json                # TypeScript 설정
-│   ├── .env.example                 # 환경 변수 예제
-│   ├── src/
-│   │   ├── app/                     # App Router (Next.js 15)
-│   │   │   ├── layout.tsx           # 루트 레이아웃 (메타데이터, 전역 스타일)
-│   │   │   ├── page.tsx             # 홈 페이지 (튜터 인터페이스)
-│   │   │   ├── globals.css          # 전역 CSS 스타일
-│   │   │   └── api/tutor/           # Next.js Route Handlers (API 프록시)
-│   │   │       ├── analyze/route.ts # 텍스트 분석 프록시
-│   │   │       ├── analyze-image/route.ts # 이미지 분석 프록시
-│   │   │       └── chat/route.ts    # 후속 질문 프록시
-│   │   ├── components/              # React 컴포넌트
-│   │   │   ├── ui/                  # shadcn/ui 재사용 컴포넌트
-│   │   │   ├── chat/                # 대화 인터페이스 컴포넌트
-│   │   │   │   ├── chat-container.tsx      # 대화 레이아웃
-│   │   │   │   ├── message-list.tsx        # 메시지 목록
-│   │   │   │   ├── user-message.tsx        # 사용자 메시지 UI
-│   │   │   │   ├── tutor-message.tsx       # 튜터 응답 UI (스트리밍)
-│   │   │   │   ├── chat-input.tsx          # 입력 필드
-│   │   │   │   └── image-upload.tsx        # 이미지 업로드 인터페이스
-│   │   │   ├── tutor/               # 튜터 분석 결과 컴포넌트
-│   │   │   │   ├── tabbed-output.tsx       # 탭 인터페이스 (Reading/Grammar/Vocabulary)
-│   │   │   │   ├── reading-panel.tsx       # 읽기 이해 분석 패널
-│   │   │   │   ├── grammar-panel.tsx       # 문법 분석 패널
-│   │   │   │   └── vocabulary-panel.tsx    # 어휘 분석 패널
-│   │   │   └── controls/            # 제어 및 설정 컴포넌트
-│   │   │       ├── header.tsx       # 앱 헤더 (제목, 로고)
-│   │   │       └── level-slider.tsx # 5단계 이해도 슬라이더
-│   │   ├── hooks/                   # React 커스텀 훅
-│   │   │   ├── use-tutor-stream.ts  # SSE 스트리밍 처리
-│   │   │   ├── use-session.ts       # 세션 관리 훅
-│   │   │   └── use-level-config.ts  # 이해도 설정 훅
-│   │   ├── lib/                     # 유틸리티 함수
-│   │   │   ├── api.ts               # API 클라이언트 함수
-│   │   │   ├── utils.ts             # 일반 유틸리티 함수
-│   │   │   └── constants.ts         # 상수 정의 (엔드포인트, 레벨 등)
-│   │   └── types/                   # TypeScript 타입 정의
-│   │       ├── tutor.ts             # 튜터 응답 타입
-│   │       └── chat.ts              # 대화 관련 타입
-│   ├── tests/                       # 테스트 모음
-│   │   ├── components/              # 컴포넌트 테스트
-│   │   ├── hooks/                   # 훅 테스트
-│   │   └── lib/                     # 유틸리티 함수 테스트
-│   └── .gitignore                   # Git 무시 파일 설정
-│
-├── .github/                         # GitHub 설정
-│   └── workflows/                   # CI/CD 워크플로우
-│       ├── backend-test.yml         # 백엔드 테스트 파이프라인
-│       ├── frontend-test.yml        # 프론트엔드 테스트 파이프라인
-│       └── deploy.yml               # 배포 자동화 워크플로우
+├── src/                              # Next.js 프론트엔드 (프로젝트 루트)
+│   ├── app/                         # App Router (Next.js 15)
+│   │   ├── layout.tsx               # 루트 레이아웃 (메타데이터, 전역 스타일)
+│   │   ├── page.tsx                 # 홈 페이지 (튜터 인터페이스)
+│   │   ├── globals.css              # 전역 CSS 스타일
+│   │   └── api/tutor/               # Next.js Route Handlers (API 프록시)
+│   │       ├── analyze/route.ts     # 텍스트 분석 프록시
+│   │       ├── analyze-image/route.ts # 이미지 분석 프록시
+│   │       └── chat/route.ts        # 후속 질문 프록시
+│   ├── components/                  # React 컴포넌트
+│   │   ├── ui/                      # shadcn/ui 재사용 컴포넌트
+│   │   ├── chat/                    # 대화 인터페이스 컴포넌트 (6개)
+│   │   │   ├── chat-container.tsx   # 대화 레이아웃
+│   │   │   ├── message-list.tsx     # 메시지 목록
+│   │   │   ├── user-message.tsx     # 사용자 메시지 UI
+│   │   │   ├── tutor-message.tsx    # 튜터 응답 UI (스트리밍)
+│   │   │   ├── chat-input.tsx       # 입력 필드
+│   │   │   └── image-upload.tsx     # 이미지 업로드 인터페이스
+│   │   ├── tutor/                   # 튜터 분석 결과 컴포넌트
+│   │   │   ├── tabbed-output.tsx    # 탭 인터페이스 (Reading/Grammar/Vocabulary)
+│   │   │   ├── reading-panel.tsx    # 읽기 이해 분석 패널
+│   │   │   ├── grammar-panel.tsx    # 문법 분석 패널
+│   │   │   └── vocabulary-panel.tsx # 어휘 분석 패널
+│   │   ├── layout/                  # 레이아웃 컴포넌트
+│   │   │   └── desktop-layout.tsx   # 데스크톱 레이아웃
+│   │   ├── mobile/                  # 모바일 컴포넌트
+│   │   │   └── analysis-view.tsx    # 분석 결과 뷰
+│   │   └── controls/                # 제어 및 설정 컴포넌트
+│   │       ├── header.tsx           # 앱 헤더 (제목, 로고)
+│   │       └── level-slider.tsx     # 5단계 이해도 슬라이더
+│   ├── hooks/                       # React 커스텀 훅
+│   │   ├── use-tutor-stream.ts      # SSE 스트리밍 처리 (vocabularyError 상태)
+│   │   ├── use-session.ts           # 세션 관리 훅
+│   │   └── use-level-config.ts      # 이해도 설정 훅
+│   ├── lib/                         # 유틸리티 함수
+│   │   ├── api.ts                   # API 클라이언트 함수
+│   │   ├── utils.ts                 # 일반 유틸리티 함수
+│   │   └── constants.ts             # 상수 정의 (엔드포인트, 레벨 등)
+│   └── types/                       # TypeScript 타입 정의
+│       ├── tutor.ts                 # 튜터 응답 타입
+│       └── chat.ts                  # 대화 관련 타입
 │
 ├── .moai/                           # MoAI-ADK 설정 및 문서
 │   ├── config/                      # 프로젝트 설정
 │   │   └── sections/
 │   │       ├── quality.yaml         # 품질 게이트 설정
 │   │       ├── user.yaml            # 사용자 정보
-│   │       └── language.yaml        # 언어 설정
+│   │       ├── language.yaml        # 언어 설정
+│   │       ├── workflow.yaml        # 워크플로우 설정
+│   │       ├── context.yaml         # 컨텍스트 설정
+│   │       ├── llm.yaml             # LLM 설정
+│   │       └── mx.yaml              # MX 설정
 │   ├── specs/                       # SPEC 문서
-│   │   └── SPEC-XXX/
-│   │       └── spec.md              # 요구사항 명세
+│   │   ├── SPEC-AUTH-001/
+│   │   ├── SPEC-READING-001/
+│   │   ├── SPEC-GRAMMAR-001/
+│   │   ├── SPEC-VOCAB-001/
+│   │   └── ...                      # 기타 SPEC 문서
 │   ├── project/                     # 프로젝트 문서
 │   │   ├── product.md               # 상품 명세
-│   │   ├── structure.md              # 프로젝트 구조
+│   │   ├── structure.md             # 프로젝트 구조
 │   │   └── tech.md                  # 기술 스택
 │   └── docs/                        # 자동 생성 문서
 │
@@ -118,11 +109,14 @@ ai-english-tutor/
 │   ├── agents/                      # 커스텀 에이전트 정의
 │   ├── skills/                      # 커스텀 스킬 정의
 │   ├── commands/                    # 커스텀 슬래시 명령
+│   ├── hooks/                       # 프로젝트 훅
 │   └── rules/                       # 프로젝트 규칙
 │
 ├── CLAUDE.md                        # MoAI 실행 지침
 ├── README.md                        # 프로젝트 개요
-├── CHANGELOG.md                     # 변경 이력
+├── package.json                     # 프론트엔드 의존성 및 스크립트
+├── tsconfig.json                    # TypeScript 설정
+├── next.config.ts                   # Next.js 설정
 └── .gitignore                       # Git 무시 설정
 ```
 
@@ -146,7 +140,7 @@ ai-english-tutor/
 - `src/services/streaming.py`: SSE 메시지 포맷팅 및 전송
 - `src/agents/prompts/`: 프롬프트 템플릿 디렉토리 (코드 변경 없이 프롬프트 튜닝 가능)
 
-### frontend/ - Next.js 프론트엔드
+### src/ - Next.js 프론트엔드 (프로젝트 루트)
 
 **목적:** 사용자 인터페이스 및 백엔드 API 통신
 
@@ -159,11 +153,11 @@ ai-english-tutor/
 - 후속 질문 입력 및 대화 관리
 
 **주요 파일:**
-- `src/app/page.tsx`: 메인 튜터 인터페이스
-- `src/components/chat/chat-container.tsx`: 대화 레이아웃
-- `src/components/tutor/tabbed-output.tsx`: 분석 결과 탭
-- `src/hooks/use-tutor-stream.ts`: SSE 스트리밍 처리 로직
-- `src/app/api/tutor/analyze/route.ts`: 백엔드 API 프록시
+- `app/page.tsx`: 메인 튜터 인터페이스
+- `components/chat/chat-container.tsx`: 대화 레이아웃
+- `components/tutor/tabbed-output.tsx`: 분석 결과 탭
+- `hooks/use-tutor-stream.ts`: SSE 스트리밍 처리 로직 (vocabularyError 상태)
+- `app/api/tutor/analyze/route.ts`: 백엔드 API 프록시
 
 ### .moai/ - MoAI-ADK 설정
 
@@ -180,22 +174,23 @@ ai-english-tutor/
 ### Backend 모듈 의존성
 
 ```
-main.py
-    ├── api/router.py
-    │   └── api/tutor.py
-    │       ├── agents/graph.py
-    │       │   ├── agents/state.py
-    │       │   ├── agents/supervisor.py
-    │       │   ├── agents/reading.py
-    │       │   │   └── agents/prompts/reading_tutor.md
-    │       │   ├── agents/grammar.py
-    │       │   │   └── agents/prompts/grammar_tutor.md
-    │       │   ├── agents/vocabulary.py
-    │       │   │   └── agents/prompts/vocabulary_tutor.md
-    │       │   └── agents/aggregator.py
-    │       ├── services/streaming.py
-    │       ├── services/session.py
-    │       └── services/image.py
+tutor/main.py
+    ├── routers/tutor.py (_stream_graph_events)
+    │   └── graph.py
+    │       ├── state.py
+    │       ├── agents/supervisor.py
+    │       ├── agents/reading.py
+    │       │   └── prompts/reading_tutor.md
+    │       ├── agents/grammar.py
+    │       │   └── prompts/grammar_tutor.md
+    │       ├── agents/vocabulary.py
+    │       │   └── prompts/vocabulary_tutor.md
+    │       ├── agents/image_processor.py
+    │       │   └── prompts/image_processor.md
+    │       └── agents/aggregator.py
+    ├── services/streaming.py (SSE 포맷터)
+    ├── services/session.py
+    ├── services/image.py
     ├── models/llm.py
     └── config.py
 ```
@@ -213,12 +208,12 @@ main.py
 ### Frontend 모듈 의존성
 
 ```
-page.tsx (Main Interface)
+app/page.tsx (Main Interface)
     ├── components/chat/chat-container.tsx
     │   ├── components/chat/message-list.tsx
     │   ├── components/chat/user-message.tsx
     │   ├── components/chat/tutor-message.tsx
-    │   │   └── hooks/use-tutor-stream.ts
+    │   │   └── hooks/use-tutor-stream.ts (vocabularyError 상태 처리)
     │   ├── components/chat/chat-input.tsx
     │   └── components/chat/image-upload.tsx
     ├── components/tutor/tabbed-output.tsx
@@ -291,13 +286,13 @@ page.tsx (Main Interface)
 
 | 파일 | 역할 |
 |------|------|
-| `src/agents/state.py` | LangGraph 상태 정의 (메시지, 이해도, 세션 정보) |
-| `src/agents/supervisor.py` | Supervisor Agent (GPT-4o-mini, 작업 라우팅) |
-| `src/agents/reading.py` | Reading Tutor Agent (Claude Sonnet) |
-| `src/agents/grammar.py` | Grammar Tutor Agent (GPT-4o, 구조화된 출력) |
-| `src/agents/vocabulary.py` | Vocabulary Tutor Agent (Claude Haiku) |
-| `src/agents/image_processor.py` | Image Processor Agent (Claude Sonnet, Vision) |
-| `src/services/streaming.py` | SSE 이벤트 처리 및 포맷팅 |
+| `src/tutor/state.py` | LangGraph 상태 정의 (메시지, 이해도, 세션 정보) |
+| `src/tutor/agents/supervisor.py` | Supervisor Agent (gpt-4o-mini, 작업 라우팅) |
+| `src/tutor/agents/reading.py` | Reading Tutor Agent (gpt-4o-mini) |
+| `src/tutor/agents/grammar.py` | Grammar Tutor Agent (gpt-4o-mini, 구조화된 출력) |
+| `src/tutor/agents/vocabulary.py` | Vocabulary Tutor Agent (gpt-4o-mini) |
+| `src/tutor/agents/image_processor.py` | Image Processor Agent (gpt-4o-mini, Vision) |
+| `src/tutor/services/streaming.py` | SSE 이벤트 처리 및 포맷팅 |
 
 ### Frontend 핵심 파일
 
