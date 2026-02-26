@@ -577,6 +577,30 @@ class TestVocabularyAgent:
         assert len(vocab_result.words) == 0
 
     @pytest.mark.asyncio
+    async def test_vocabulary_agent_returns_error_info_on_failure(
+        self, vocabulary_state: TutorState
+    ) -> None:
+        """
+        GIVEN a vocabulary agent that encounters an error
+        WHEN vocabulary_node is called
+        THEN it should return empty VocabularyResult AND vocabulary_error message
+        """
+        from tutor.agents.vocabulary import vocabulary_node
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.side_effect = Exception("API Error")
+
+        with patch("tutor.agents.vocabulary.get_llm", return_value=mock_llm):
+            result = await vocabulary_node(vocabulary_state)
+
+        assert "vocabulary_result" in result
+        vocab_result = result["vocabulary_result"]
+        assert isinstance(vocab_result, VocabularyResult)
+        assert len(vocab_result.words) == 0
+        assert "vocabulary_error" in result
+        assert result["vocabulary_error"] == "API Error"
+
+    @pytest.mark.asyncio
     async def test_vocabulary_agent_returns_empty_list_for_simple_text(
         self, vocabulary_state: TutorState
     ) -> None:

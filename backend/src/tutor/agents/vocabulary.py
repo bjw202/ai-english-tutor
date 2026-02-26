@@ -130,4 +130,7 @@ async def vocabulary_node(state: TutorState) -> dict:
         return {"vocabulary_result": VocabularyResult(words=words)}
     except Exception as e:
         logger.error(f"Error in vocabulary_node: {e}")
-        return {"vocabulary_result": VocabularyResult(words=[])}
+        return {
+            "vocabulary_result": VocabularyResult(words=[]),
+            "vocabulary_error": str(e),
+        }

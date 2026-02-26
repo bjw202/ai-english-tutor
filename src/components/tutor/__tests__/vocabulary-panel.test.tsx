@@ -42,4 +42,17 @@ describe("VocabularyPanel", () => {
 
     expect(screen.getByText("아직 어휘 분석이 없습니다")).toBeInTheDocument();
   });
+
+  it("should display error message when error prop is provided", () => {
+    render(<VocabularyPanel result={null} error="LLM API failed" />);
+
+    expect(screen.getByText(/오류가 발생했습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/LLM API failed/)).toBeInTheDocument();
+  });
+
+  it("should show error state instead of empty state when error is provided", () => {
+    render(<VocabularyPanel result={null} error="Some error" />);
+
+    expect(screen.queryByText("아직 어휘 분석이 없습니다")).not.toBeInTheDocument();
+  });
 });

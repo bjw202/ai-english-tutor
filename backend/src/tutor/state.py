@@ -28,6 +28,7 @@ class TutorState(TypedDict):
         reading_result: Optional reading comprehension analysis result
         grammar_result: Optional grammar analysis result
         vocabulary_result: Optional vocabulary analysis result
+        vocabulary_error: Optional error message when vocabulary agent fails
         extracted_text: Optional OCR-extracted text from image processing
         task_type: Type of task to execute ("analyze" | "image_process" | "chat")
         supervisor_analysis: Optional pre-analysis result from supervisor LLM
@@ -46,6 +47,7 @@ class TutorState(TypedDict):
     reading_result: NotRequired[ReadingResult | None]
     grammar_result: NotRequired[GrammarResult | None]
     vocabulary_result: NotRequired[VocabularyResult | None]
+    vocabulary_error: NotRequired[str | None]
     extracted_text: NotRequired[str | None]
     supervisor_analysis: NotRequired[SupervisorAnalysis | None]
     image_data: NotRequired[str | None]

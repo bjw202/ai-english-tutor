@@ -7,13 +7,26 @@ interface VocabularyPanelProps {
   result: VocabularyResult | null;
   className?: string;
   isStreaming?: boolean;
+  error?: string | null;
 }
 
 /**
  * Vocabulary etymology learning panel
  * Displays list of words with Korean Markdown etymology explanations
  */
-export function VocabularyPanel({ result, className, isStreaming = false }: VocabularyPanelProps) {
+export function VocabularyPanel({ result, className, isStreaming = false, error }: VocabularyPanelProps) {
+  if (error) {
+    return (
+      <Card className={className}>
+        <CardContent className="p-6">
+          <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
+            어휘 분석 중 오류가 발생했습니다: {error}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if ((!result || !result.words || result.words.length === 0) && !isStreaming) {
     return (
       <Card className={className}>

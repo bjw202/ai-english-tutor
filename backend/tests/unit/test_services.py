@@ -26,6 +26,7 @@ from tutor.services.streaming import (
     format_reading_chunk,
     format_sse_event,
     format_vocabulary_chunk,
+    format_vocabulary_error,
 )
 
 
@@ -271,6 +272,18 @@ class TestSSEFormatting:
         # Assert: Verify SSE format structure
         expected = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
         assert result == expected
+
+    def test_sse_format_vocabulary_error(self):
+        """Test that vocabulary error events are formatted correctly as SSE events."""
+        message = "LLM API failed"
+        result = format_vocabulary_error(message)
+        assert result.startswith("event: vocabulary_error\ndata: ")
+        assert "\n\n" in result
+        lines = result.strip().split("\n")
+        data_line = lines[1].replace("data: ", "")
+        parsed = json.loads(data_line)
+        assert parsed["message"] == message
+        assert parsed["code"] == "vocabulary_error"
 
 
 class TestImageValidation:

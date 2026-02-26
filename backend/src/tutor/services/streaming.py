@@ -119,3 +119,15 @@ def format_section_done(section: str) -> str:
         A formatted SSE event with event_type="{section}_done"
     """
     return format_sse_event(f"{section}_done", {"section": section})
+
+
+def format_vocabulary_error(message: str) -> str:
+    """Format vocabulary error as SSE event.
+
+    Args:
+        message: The error message from the vocabulary agent
+
+    Returns:
+        A formatted SSE event with event_type="vocabulary_error"
+    """
+    return format_sse_event("vocabulary_error", {"message": message, "code": "vocabulary_error"})

@@ -25,6 +25,7 @@ from tutor.services.streaming import (
     format_reading_token,
     format_section_done,
     format_vocabulary_chunk,
+    format_vocabulary_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,15 @@ async def _stream_graph_events(input_state: dict, session_id: str) -> AsyncGener
                     yield format_section_done("reading")
                 elif node_name == "grammar":
                     yield format_section_done("grammar")
+                elif node_name == "vocabulary":
+                    output = event.get("data", {}).get("output", {})
+                    vocab_error = output.get("vocabulary_error")
+                    vocab_result = output.get("vocabulary_result")
+                    if vocab_error:
+                        yield format_vocabulary_error(vocab_error)
+                    elif vocab_result and hasattr(vocab_result, "words") and vocab_result.words:
+                        yield format_vocabulary_chunk(vocab_result.model_dump())
+                    yield format_section_done("vocabulary")
                 elif node_name == "aggregator":
                     # Extract vocabulary from aggregator output
                     output = event.get("data", {}).get("output", {})

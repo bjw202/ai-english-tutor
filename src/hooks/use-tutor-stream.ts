@@ -10,6 +10,7 @@ export interface TutorStreamState {
   readingStreaming: boolean;
   grammarStreaming: boolean;
   vocabularyStreaming: boolean;
+  vocabularyError: string | null;
 }
 
 /**
@@ -50,6 +51,7 @@ export function useTutorStream() {
     readingStreaming: false,
     grammarStreaming: false,
     vocabularyStreaming: false,
+    vocabularyError: null,
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -74,6 +76,7 @@ export function useTutorStream() {
       readingStreaming: true,
       grammarStreaming: true,
       vocabularyStreaming: true,
+      vocabularyError: null,
     }));
 
     try {
@@ -202,6 +205,17 @@ export function useTutorStream() {
                   vocabularyWords: data.words || [],
                   vocabularyStreaming: false,
                 }));
+              } else if (currentEvent === "vocabulary_done") {
+                setState((prev) => ({
+                  ...prev,
+                  vocabularyStreaming: false,
+                }));
+              } else if (currentEvent === "vocabulary_error") {
+                setState((prev) => ({
+                  ...prev,
+                  vocabularyStreaming: false,
+                  vocabularyError: data.message || "Vocabulary analysis failed",
+                }));
               }
             } catch {
               // If JSON parsing fails, treat as plain text
@@ -249,6 +263,7 @@ export function useTutorStream() {
       readingStreaming: false,
       grammarStreaming: false,
       vocabularyStreaming: false,
+      vocabularyError: null,
     });
   }, []);
 

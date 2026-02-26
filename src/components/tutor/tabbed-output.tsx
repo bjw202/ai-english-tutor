@@ -14,6 +14,7 @@ interface TabbedOutputProps {
   readingStreaming?: boolean;
   grammarStreaming?: boolean;
   vocabularyStreaming?: boolean;
+  vocabularyError?: string | null;
 }
 
 /**
@@ -28,6 +29,7 @@ export function TabbedOutput({
   readingStreaming = false,
   grammarStreaming = false,
   vocabularyStreaming = false,
+  vocabularyError,
 }: TabbedOutputProps) {
   const [activeTab, setActiveTab] = useState("reading");
 
@@ -65,7 +67,7 @@ export function TabbedOutput({
         </TabsContent>
 
         <TabsContent value="vocabulary" className="mt-4 flex-1 overflow-y-auto">
-          <VocabularyPanel result={vocabulary} isStreaming={vocabularyStreaming} />
+          <VocabularyPanel result={vocabulary} isStreaming={vocabularyStreaming} error={vocabularyError} />
         </TabsContent>
       </Tabs>
     </div>

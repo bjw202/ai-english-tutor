@@ -343,4 +343,58 @@ describe("useTutorStream", () => {
     expect(result.current.state.grammarStreaming).toBe(false);
     expect(result.current.state.vocabularyStreaming).toBe(false);
   });
+
+  it("should set vocabularyStreaming to false on vocabulary_done event", async () => {
+    const chunks = [
+      'event: vocabulary_done\ndata: {"section": "vocabulary"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.vocabularyStreaming).toBe(false);
+  });
+
+  it("should handle vocabulary_error event and set error state", async () => {
+    const chunks = [
+      'event: vocabulary_error\ndata: {"message": "LLM API failed", "code": "vocabulary_error"}\n\n',
+      'event: vocabulary_done\ndata: {"section": "vocabulary"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+    const mockReader = { read: vi.fn() };
+    chunks.forEach((chunk) => {
+      mockReader.read.mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(chunk),
+      });
+    });
+    mockReader.read.mockResolvedValueOnce({ done: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => mockReader },
+    });
+
+    const { result } = renderHook(() => useTutorStream());
+    await act(async () => {
+      await result.current.startStream(() => fetch("/api/test"));
+    });
+
+    expect(result.current.state.vocabularyError).toBe("LLM API failed");
+    expect(result.current.state.vocabularyStreaming).toBe(false);
+  });
 });
