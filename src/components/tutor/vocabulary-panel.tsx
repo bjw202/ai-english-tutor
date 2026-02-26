@@ -38,6 +38,20 @@ export function VocabularyPanel({
   }
 
   if ((!result || !result.words || result.words.length === 0) && !isStreaming) {
+    if (rawContent) {
+      return (
+        <Card className={className}>
+          <CardHeader>
+            <CardTitle className="text-lg">어휘 어원 학습</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown>{rawContent}</ReactMarkdown>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
     return (
       <Card className={className}>
         <CardContent className="p-6 text-center text-muted-foreground">

@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-02-26
+
+### Fixed
+
+- **Vocabulary Streaming Production Bug (SPEC-VOCAB-004)** - 스트리밍 완료 후 어휘 분석 결과 사라지는 문제 해결
+
+  **Background:**
+  프로덕션 환경(Vercel + Railway)에서 다음과 같은 현상 발생:
+  - `vocabulary_token` 이벤트 도착 → 사용자가 스트리밍 중 콘텐츠 확인 (정상)
+  - `vocabulary_done` 이벤트 도착 → 콘텐츠 사라짐 → "아직 어휘 분석이 없습니다" 표시 (오류)
+
+  **Root Cause Analysis:**
+  1. **LLM h1 heading 생성**: LLM이 가끔 `# word` (h1)을 생성하는데, 정규식 `#{3,6}`은 h3-h6만 감지하여 h1 제목을 놓침
+  2. **빈 vocabulary_chunk**: h1 제목을 파싱하지 못하면 `_parse_vocabulary_words()`가 빈 배열 반환 → `vocabulary_chunk` 이벤트 미전송
+  3. **Frontend fallback 부재**: `vocabulary_chunk`을 받지 못했을 때 `rawContent` 표시 로직 없음 → 정상적으로 생성된 markdown 콘텐츠를 버림
+
+  **해결:**
+  1. **Markdown 정규식 수정** (`backend/src/tutor/utils/markdown_normalizer.py`)
+     - `#{3,6}` → `#{1,6}` 변경 (h1-h6 모두 처리)
+     - LLM이 생성한 h1 제목도 올바르게 정규화
+
+  2. **Frontend rawContent fallback** (`src/components/tutor/vocabulary-panel.tsx`)
+     - `vocabulary_chunk` 이벤트가 도착하지 않았을 때도 `rawContent` 콘텐츠 표시
+     - 스트리밍 완료 후에도 마크다운 내용 유지
+
+  3. **Test 추가**
+     - `test_h1_word_heading_corrected`: h1 heading 정규화 확인
+     - `test_h1_vocabulary_fallback`: h1 heading으로 인한 rawContent fallback 동작 확인
+     - Vitest 타입 설정 수정 (`src/test/setup.ts`, `tsconfig.test.json`)
+
+  **결과:**
+  - 스트리밍 완료 후에도 어휘 분석 결과 안정적으로 표시
+  - LLM heading 형식 변동성 대응
+  - 프로덕션 스트리밍 안정성 개선
+
 ## [1.1.4] - 2026-02-26
 
 ### Changed

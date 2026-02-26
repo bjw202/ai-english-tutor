@@ -170,6 +170,11 @@ class TestNormalizeGrammarOutput:
 
 
 class TestNormalizeVocabularyOutput:
+    def test_h1_word_heading_corrected(self):
+        inp = "# accomplish\n내용"
+        out = normalize_vocabulary_output(inp)
+        assert "## accomplish" in out
+
     def test_wrong_level_word_heading_corrected(self):
         inp = "### accomplish\n내용"
         out = normalize_vocabulary_output(inp)

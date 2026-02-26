@@ -43,6 +43,21 @@ describe("VocabularyPanel", () => {
     expect(screen.getByText("아직 어휘 분석이 없습니다")).toBeInTheDocument();
   });
 
+  it("should show rawContent fallback when streaming is done but words is empty", () => {
+    const rawContent = "## ephemeral\n**어원:** 그리스어 *ephemeros*에서 유래.";
+    render(<VocabularyPanel result={null} isStreaming={false} rawContent={rawContent} />);
+
+    expect(screen.getByText("어휘 어원 학습")).toBeInTheDocument();
+    expect(screen.queryByText("아직 어휘 분석이 없습니다")).not.toBeInTheDocument();
+    expect(screen.getByText(/ephemeros/)).toBeInTheDocument();
+  });
+
+  it("should show empty state when streaming is done, words is empty, and rawContent is empty", () => {
+    render(<VocabularyPanel result={null} isStreaming={false} rawContent="" />);
+
+    expect(screen.getByText("아직 어휘 분석이 없습니다")).toBeInTheDocument();
+  });
+
   it("should display error message when error prop is provided", () => {
     render(<VocabularyPanel result={null} error="LLM API failed" />);
 

@@ -127,10 +127,11 @@ def _normalize_vocab_word_headings(content: str) -> str:
 
     Only converts headings that start with an ASCII letter (English word entries).
     Numbered Korean sub-headings (### 1. 기본 뜻) are left untouched.
+    Handles all heading levels # through ###### (h1-h6).
     """
-    # Wrong heading level: ### word or #### word ... ###### word (English only)
+    # Wrong heading level: # word or ### word ... ###### word (English only)
     content = re.sub(
-        r"^#{3,6}\s+([A-Za-z][A-Za-z0-9\s\-]*)\s*$",
+        r"^#{1,6}\s+([A-Za-z][A-Za-z0-9\s\-]*)\s*$",
         r"## \1",
         content,
         flags=re.MULTILINE,
