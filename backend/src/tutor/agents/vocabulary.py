@@ -102,7 +102,7 @@ async def vocabulary_node(state: TutorState, token_queue: asyncio.Queue | None =
         Dictionary with "vocabulary_result" key containing VocabularyResult
     """
     settings = get_settings()
-    llm = get_llm(settings.VOCABULARY_MODEL, max_tokens=6144)
+    llm = get_llm(settings.VOCABULARY_MODEL, max_tokens=8192)
 
     level = state.get("level", 3)
     input_text = state.get("input_text", "")
