@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
+export const runtime = 'edge';
+
 /**
  * Route handler for follow-up chat
  * Proxies POST requests to FastAPI backend with SSE streaming
